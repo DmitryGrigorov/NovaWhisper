@@ -1,0 +1,12 @@
+[package]
+name = "whispr-insert"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+arboard = "3"
+enigo = "0.2"

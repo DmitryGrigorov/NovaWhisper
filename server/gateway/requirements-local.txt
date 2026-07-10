@@ -1,0 +1,2 @@
+# Local GPU/CPU transcription (no cloud). See README for CUDA setup on Windows.
+faster-whisper>=1.1

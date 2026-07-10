@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Whispr</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 28px; font: 14px/1.5 system-ui, sans-serif;
+    background: #14141f; color: #e8e8f0;
+  }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .sub { color: #9a9ab0; margin: 0 0 20px; font-size: 13px; }
+  label { display: block; margin: 14px 0 4px; font-weight: 600; font-size: 13px; }
+  input, select, textarea {
+    width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #33334a;
+    background: #1d1d2c; color: #e8e8f0; font: inherit;
+  }
+  textarea { min-height: 72px; font-family: ui-monospace, monospace; font-size: 12.5px; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  .hint { color: #77778f; font-size: 12px; margin-top: 3px; }
+  .buttons { display: flex; gap: 10px; margin-top: 22px; }
+  button {
+    padding: 9px 16px; border-radius: 8px; border: none; font: inherit; font-weight: 600;
+    background: #4f46e5; color: white; cursor: pointer;
+  }
+  button.secondary { background: #2b2b40; }
+  button:hover { filter: brightness(1.15); }
+  #status { margin-top: 14px; min-height: 20px; font-size: 13px; color: #8f8fa8; }
+  #log {
+    margin-top: 10px; max-height: 160px; overflow-y: auto; padding: 10px;
+    background: #10101a; border-radius: 8px; font-family: ui-monospace, monospace;
+    font-size: 12px; white-space: pre-wrap;
+  }
+  .ok { color: #4ade80; } .err { color: #f87171; }
+</style>
+</head>
+<body>
+  <h1>Whispr</h1>
+  <p class="sub">Voice to text, anywhere. Press the global hotkey in any app to dictate.</p>
+
+  <div class="row">
+    <div>
+      <label for="gateway_url">Gateway URL</label>
+      <input id="gateway_url" placeholder="ws://127.0.0.1:8765/v1/stream" />
+    </div>
+    <div>
+      <label for="hotkey">Global hotkey</label>
+      <input id="hotkey" placeholder="ctrl+shift+space" />
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label for="language">Language</label>
+      <select id="language">
+        <option value="auto">Auto-detect</option>
+        <option value="en">English</option>
+        <option value="es">Spanish</option>
+        <option value="de">German</option>
+        <option value="fr">French</option>
+        <option value="bg">Bulgarian</option>
+        <option value="ja">Japanese</option>
+        <option value="zh">Chinese</option>
+      </select>
+    </div>
+    <div>
+      <label for="polish_mode">AI polish</label>
+      <select id="polish_mode">
+        <option value="none">Off (raw transcript)</option>
+        <option value="fillers">Remove fillers (fast)</option>
+        <option value="full">Full polish (LLM)</option>
+      </select>
+    </div>
+    <div>
+      <label for="insert_method">Insertion</label>
+      <select id="insert_method">
+        <option value="auto">Auto (a11y → paste → type)</option>
+        <option value="paste">Clipboard paste</option>
+        <option value="type">Type keystrokes</option>
+      </select>
+    </div>
+  </div>
+
+  <label for="dictionary">Personal dictionary <span class="hint">— one term per line; used for recognition boosting and exact casing</span></label>
+  <textarea id="dictionary" placeholder="Whispr&#10;Grigorov&#10;PostgreSQL"></textarea>
+
+  <label for="snippets">Snippets <span class="hint">— one per line: spoken trigger :: expansion (use \n for line breaks)</span></label>
+  <textarea id="snippets" placeholder="my signature :: Best regards,\nDimitar&#10;standup link :: https://meet.example.com/standup"></textarea>
+
+  <div class="buttons">
+    <button id="save">Save settings</button>
+    <button id="toggle" class="secondary">Start/Stop dictation</button>
+    <button id="testInsert" class="secondary">Test insertion (3s delay)</button>
+  </div>
+  <div id="status"></div>
+  <div id="log"></div>
+
+<script>
+  const { invoke } = window.__TAURI__.core;
+  const { listen } = window.__TAURI__.event;
+  const $ = (id) => document.getElementById(id);
+  const status = (msg, cls) => { $("status").textContent = msg; $("status").className = cls || ""; };
+  const log = (msg, cls) => {
+    const line = document.createElement("div");
+    if (cls) line.className = cls;
+    line.textContent = `${new Date().toLocaleTimeString()}  ${msg}`;
+    $("log").prepend(line);
+  };
+
+  let config = null;
+
+  async function load() {
+    config = await invoke("get_config");
+    $("gateway_url").value = config.gateway_url;
+    $("hotkey").value = config.hotkey;
+    $("language").value = config.language;
+    $("polish_mode").value = config.polish_mode;
+    $("insert_method").value = config.insert_method;
+    $("dictionary").value = (config.dictionary || []).join("\n");
+    $("snippets").value = (config.snippets || [])
+      .map((s) => `${s.trigger} :: ${s.expansion.replaceAll("\n", "\\n")}`)
+      .join("\n");
+  }
+
+  $("save").addEventListener("click", async () => {
+    try {
+      config.gateway_url = $("gateway_url").value.trim();
+      config.hotkey = $("hotkey").value.trim();
+      config.language = $("language").value;
+      config.polish_mode = $("polish_mode").value;
+      config.insert_method = $("insert_method").value;
+      config.dictionary = $("dictionary").value.split("\n").map(s => s.trim()).filter(Boolean);
+      config.snippets = $("snippets").value.split("\n").map(s => s.trim()).filter(Boolean)
+        .map((line) => {
+          const idx = line.indexOf("::");
+          if (idx < 0) return null;
+          return {
+            trigger: line.slice(0, idx).trim(),
+            expansion: line.slice(idx + 2).trim().replaceAll("\\n", "\n"),
+          };
+        }).filter(Boolean);
+      await invoke("save_config", { config });
+      status("Settings saved.", "ok");
+    } catch (e) {
+      status(`Save failed: ${e}`, "err");
+    }
+  });
+
+  $("toggle").addEventListener("click", async () => {
+    try {
+      const recording = await invoke("toggle_dictation");
+      status(recording ? "Recording…" : "Stopped.");
+    } catch (e) {
+      status(`${e}`, "err");
+    }
+  });
+
+  $("testInsert").addEventListener("click", async () => {
+    status("Focus a text field anywhere — inserting in 3 seconds…");
+    try {
+      const via = await invoke("test_insert", {
+        text: "Hello from Whispr! ",
+        method: $("insert_method").value,
+      });
+      status(`Inserted via ${via}.`, "ok");
+    } catch (e) {
+      status(`Insertion failed: ${e}`, "err");
+    }
+  });
+
+  listen("whispr://event", ({ payload }) => {
+    switch (payload.kind) {
+      case "status": log(payload.recording ? "● recording started" : "○ recording stopped"); break;
+      case "partial": log(`partial: ${payload.text}`); break;
+      case "final": log(`final (${payload.duration_ms} ms): ${payload.text}`, "ok"); break;
+      case "inserted": log(`inserted via ${payload.via}`, "ok"); break;
+      case "error": log(`error: ${payload.message}`, "err"); break;
+    }
+  });
+
+  load().catch((e) => status(`Failed to load config: ${e}`, "err"));
+</script>
+</body>
+</html>

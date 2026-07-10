@@ -1,0 +1,11 @@
+target/
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.sqlite3
+.DS_Store
+apps/desktop/src-tauri/gen/

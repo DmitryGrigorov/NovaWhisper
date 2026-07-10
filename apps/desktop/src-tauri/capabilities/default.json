@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Whispr windows: settings UI and dictation HUD",
+  "windows": ["main", "hud"],
+  "permissions": ["core:default"]
+}
