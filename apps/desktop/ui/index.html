@@ -29,6 +29,28 @@
   button.ghost { background: transparent; color: #aaaac0; border: 1px solid #35354c; }
   button:disabled { cursor: default; opacity: .42; filter: none; }
   #clipboardList { display: grid; gap: 8px; margin-top: 13px; max-height: 240px; overflow-y: auto; }
+  #clipboardLoader {
+    display: none; align-items: center; gap: 10px; margin-top: 13px; padding: 10px 12px;
+    border: 1px solid #373752; border-radius: 10px; background: #202033;
+    color: #c9c7ff; font-size: 12.5px;
+  }
+  #clipboardLoader.visible { display: flex; }
+  .loader-spinner {
+    width: 15px; height: 15px; flex: 0 0 auto; border: 2px solid #4d4b70;
+    border-top-color: #9b96ff; border-radius: 50%; animation: spin .75s linear infinite;
+  }
+  .loader-copy { min-width: 0; flex: 1; }
+  .loader-copy strong { display: block; font-size: 12.5px; font-weight: 650; }
+  .loader-copy span { display: block; margin-top: 1px; color: #777797; font-size: 11px; }
+  .loader-pulse { display: flex; align-items: flex-end; gap: 2px; height: 15px; }
+  .loader-pulse i {
+    width: 2px; height: 5px; border-radius: 2px; background: #7772e8;
+    animation: wave .9s ease-in-out infinite;
+  }
+  .loader-pulse i:nth-child(2) { animation-delay: .12s; }
+  .loader-pulse i:nth-child(3) { animation-delay: .24s; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes wave { 50% { height: 14px; background: #aaa6ff; } }
   .clip-item {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px;
     align-items: center; padding: 11px 12px; border: 1px solid #2d2d42;
@@ -84,6 +106,14 @@
         <button id="copyLatest" class="compact" disabled>Copy latest</button>
         <button id="clearClipboard" class="compact ghost" disabled>Clear</button>
       </div>
+    </div>
+    <div id="clipboardLoader" role="status" aria-live="polite">
+      <div class="loader-spinner" aria-hidden="true"></div>
+      <div class="loader-copy">
+        <strong id="clipboardLoaderTitle">Listening…</strong>
+        <span id="clipboardLoaderHint">Your transcript will appear here.</span>
+      </div>
+      <div class="loader-pulse" aria-hidden="true"><i></i><i></i><i></i></div>
     </div>
     <div id="clipboardList" aria-live="polite"></div>
   </section>
@@ -231,6 +261,20 @@
 
   function saveTranscriptHistory() {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(transcriptHistory));
+  }
+
+  function setClipboardLoading(state) {
+    const loader = $("clipboardLoader");
+    if (!state) {
+      loader.classList.remove("visible");
+      return;
+    }
+    const listening = state === "listening";
+    $("clipboardLoaderTitle").textContent = listening ? "Listening…" : "Transcribing…";
+    $("clipboardLoaderHint").textContent = listening
+      ? "Speak naturally — live transcription is running."
+      : "Turning your recording into text.";
+    loader.classList.add("visible");
   }
 
   function addTranscript(text, durationMs) {
@@ -471,15 +515,23 @@
 
   listen("whispr://event", ({ payload }) => {
     switch (payload.kind) {
-      case "status": log(payload.recording ? "● recording started" : "○ recording stopped"); break;
+      case "status":
+        log(payload.recording ? "● recording started" : "○ recording stopped");
+        if (payload.recording) setClipboardLoading("listening");
+        else if ($("clipboardLoader").classList.contains("visible")) setClipboardLoading("transcribing");
+        break;
       case "partial": log(`partial: ${payload.text}`); break;
       case "final":
+        setClipboardLoading(null);
         log(`final (${payload.duration_ms} ms): ${payload.text}`, "ok");
         addTranscript(payload.text, payload.duration_ms);
         break;
       case "inserted": log(`inserted via ${payload.via}`, "ok"); break;
       case "gateway": log(`gateway: ${payload.message}`, payload.state === "error" ? "err" : payload.state === "ready" ? "ok" : ""); break;
-      case "error": log(`error: ${payload.message}`, "err"); break;
+      case "error":
+        setClipboardLoading(null);
+        log(`error: ${payload.message}`, "err");
+        break;
     }
   });
 
