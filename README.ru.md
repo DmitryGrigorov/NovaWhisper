@@ -223,6 +223,140 @@ cargo run -p whispr-desktop
 Глобальная горячая клавиша и вставка текста на Linux сейчас требуют
 X11/XWayland.
 
+## macOS Apple Silicon (M2) — локальная модель `small`
+
+Эта конфигурация проверена при запуске из исходников на Mac с Apple Silicon M2.
+Текущий backend `faster-whisper` использует на macOS процессор. Для разумного
+баланса скорости и точности используйте многоязычную модель `small` и тип
+вычислений `int8`.
+
+Установите необходимые инструменты:
+
+```sh
+xcode-select --install
+brew install rust python@3.13
+```
+
+Создайте окружение gateway на Python 3.13. Не используйте Python 3.14: для него
+совместимые колёса CTranslate2/faster-whisper могут быть ещё недоступны. Если
+старое окружение `.venv` уже существует, сохраните его перед созданием нового:
+
+```sh
+cd /path/to/NovaWhisper/server/gateway
+mv .venv .venv-backup  # только если старое окружение .venv уже существует
+/opt/homebrew/bin/python3.13 -m venv .venv
+./.venv/bin/pip install --upgrade pip
+./.venv/bin/pip install -r requirements.txt
+./.venv/bin/pip install -r requirements-local.txt
+```
+
+Заранее скачайте модель (иначе она скачается при первом запуске gateway):
+
+```sh
+./.venv/bin/python -c "from faster_whisper import download_model; print(download_model('small'))"
+```
+
+Запустите desktop-приложение из корня репозитория:
+
+```sh
+cd /path/to/NovaWhisper
+cargo run -p whispr-desktop
+```
+
+В Settings приложения Whispr выберите:
+
+- **Speech-to-text provider:** Local Whisper
+- **Whisper model:** `small`
+- **Whisper device:** CPU
+- **Whisper compute type:** `int8`
+- **Start & stop the local gateway with the app:** включено
+
+Нажмите **Save settings**. Приложение запускает gateway из
+`server/gateway/.venv`. После изменения модели используйте
+**Tray → Restart Gateway**.
+
+### Разрешения конфиденциальности macOS
+
+При запуске версии для разработки macOS может показывать в списках разрешений
+`whispr-desktop`, Terminal, iTerm либо IDE, из которой был запущен Cargo.
+
+1. Откройте **System Settings → Privacy & Security → Microphone**.
+2. Начните запись в Whispr, дождитесь системного запроса и нажмите **Allow**.
+   Добавить приложение в список Microphone вручную нельзя.
+3. Откройте **System Settings → Privacy & Security → Accessibility** и
+   нажмите `+`.
+4. В окне выбора файла нажмите **Cmd+Shift+G**, введите путь к исполняемому
+   файлу версии для разработки, нажмите Return и добавьте файл:
+
+   ```text
+   /path/to/NovaWhisper/target/debug/whispr-desktop
+   ```
+
+5. Включите переключатель для `whispr-desktop`, завершите работающий процесс и
+   снова выполните `cargo run -p whispr-desktop`.
+
+Путь для кнопки `+` зависит от способа запуска Whispr:
+
+| Список разрешений | Что добавить через `+` | Путь после нажатия **Cmd+Shift+G** |
+|---|---|---|
+| Accessibility — `cargo run` | Исполняемый файл версии для разработки | `/path/to/NovaWhisper/target/debug/whispr-desktop` |
+| Accessibility — установленное приложение | Приложение Whispr | `/Applications/Whispr.app` |
+| Input Monitoring — `cargo run` | Сначала исполняемый файл; если hotkey не работает, добавьте также программу запуска | `/path/to/NovaWhisper/target/debug/whispr-desktop` |
+| Input Monitoring — запуск из Terminal | Apple Terminal | `/System/Applications/Utilities/Terminal.app` |
+| Input Monitoring — установленное приложение | Приложение Whispr | `/Applications/Whispr.app` |
+
+Замените `/path/to/NovaWhisper` реальным расположением репозитория. Например,
+для этого рабочего каталога путь к исполняемому файлу выглядит так:
+
+```text
+/Users/dmitry/works/NovaWhisper/target/debug/whispr-desktop
+```
+
+Если Cargo запускается из iTerm или IDE, а не из Apple Terminal, добавьте через
+`+` соответствующее приложение из `/Applications`, если macOS связывает
+разрешение именно с ним. В разделе **Microphone** кнопки `+` нет: начните запись
+и подтвердите системный запрос.
+
+Разрешение Accessibility позволяет Whispr вставлять или печатать расшифровку в
+активном приложении. Если глобальная горячая клавиша не срабатывает, включите
+программу запуска или `whispr-desktop` также в разделе
+**Privacy & Security → Input Monitoring**. Разрешения Camera, Screen Recording,
+Full Disk Access и Apple Speech Recognition не требуются.
+
+Если запрос доступа к микрофону был отклонён и больше не появляется, сбросьте
+разрешение и снова запустите диктовку:
+
+```sh
+tccutil reset Microphone ai.whispr.desktop
+```
+
+### Сборка macOS и DMG
+
+Установите Apple Command Line Tools и Rust, затем выполните сборку из корня
+репозитория:
+
+```sh
+xcode-select --install
+brew install rust
+cargo install tauri-cli --version '^2' --locked
+./scripts/build-gateway.sh        # встроить автономный gateway в DMG
+cargo test --workspace
+cargo tauri build --bundles dmg
+```
+
+Установщик для Apple Silicon будет создан здесь:
+
+```text
+target/release/bundle/dmg/Whispr_0.1.0_aarch64.dmg
+```
+
+Приложение пока не подписано и не нотаризовано. При первом запуске macOS может
+потребовать разрешить его в **System Settings → Privacy & Security**. Для
+диктовки также нужны разрешения **Microphone** и **Accessibility**. Встроенный
+gateway запускается и останавливается вместе с приложением. При разработке из
+исходников можно не выполнять `build-gateway.sh`: приложение использует
+`server/gateway/.venv`.
+
 ## Проверка проекта
 
 ```powershell

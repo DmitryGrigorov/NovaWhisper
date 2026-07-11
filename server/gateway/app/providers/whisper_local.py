@@ -65,6 +65,28 @@ def _model_config() -> tuple[str, str, str]:
     )
 
 
+def _create_model(model_class, name: str, device: str, compute: str):
+    """Create a model, recovering from compute modes unsupported by a backend.
+
+    Settings can outlive a move between CUDA and CPU machines. CTranslate2
+    raises at construction time for combinations such as int8_float16 on an
+    Apple Silicon CPU; its ``default`` mode selects a supported implementation.
+    """
+    try:
+        return model_class(name, device=device, compute_type=compute)
+    except ValueError as error:
+        if compute == "default" or "compute type" not in str(error):
+            raise
+        fallback = "int8" if device == "cpu" else "default"
+        logger.warning(
+            "compute type %s is unsupported on device %s; falling back to %s",
+            compute,
+            device,
+            fallback,
+        )
+        return model_class(name, device=device, compute_type=fallback)
+
+
 def load_model():
     """Load (and cache) the WhisperModel. Blocking — call off the event loop.
     The first call downloads the model weights."""
@@ -76,7 +98,7 @@ def load_model():
         if key not in _MODELS:
             name, device, compute = key
             logger.info("loading whisper model %s (device=%s, compute=%s)", name, device, compute)
-            _MODELS[key] = WhisperModel(name, device=device, compute_type=compute)
+            _MODELS[key] = _create_model(WhisperModel, name, device, compute)
             logger.info("whisper model ready")
         return _MODELS[key]
 

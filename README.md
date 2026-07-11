@@ -251,7 +251,113 @@ For a `.deb`/`.AppImage` that runs without Python, build the sidecar first
 
 Global hotkeys and insertion currently need X11/XWayland on Linux.
 
-## macOS build and DMG
+## macOS Apple Silicon (M2) — local `small` model
+
+The following setup is tested for running from source on an Apple Silicon M2
+Mac. The current `faster-whisper` backend uses the CPU on macOS; use the
+multilingual `small` model with `int8` compute for a practical balance of speed
+and accuracy.
+
+Install the required tools:
+
+```sh
+xcode-select --install
+brew install rust python@3.13
+```
+
+Create the gateway environment with Python 3.13. Do not use Python 3.14 because
+CTranslate2/faster-whisper wheels may not yet be available or compatible. If an
+older `.venv` already exists, preserve it before creating the new environment:
+
+```sh
+cd /path/to/NovaWhisper/server/gateway
+mv .venv .venv-backup  # only when an old .venv already exists
+/opt/homebrew/bin/python3.13 -m venv .venv
+./.venv/bin/pip install --upgrade pip
+./.venv/bin/pip install -r requirements.txt
+./.venv/bin/pip install -r requirements-local.txt
+```
+
+Download the model in advance (otherwise it downloads on first gateway start):
+
+```sh
+./.venv/bin/python -c "from faster_whisper import download_model; print(download_model('small'))"
+```
+
+Run the desktop app from the repository root:
+
+```sh
+cd /path/to/NovaWhisper
+cargo run -p whispr-desktop
+```
+
+In Whispr Settings select:
+
+- **Speech-to-text provider:** Local Whisper
+- **Whisper model:** `small`
+- **Whisper device:** CPU
+- **Whisper compute type:** `int8`
+- **Start & stop the local gateway with the app:** enabled
+
+Click **Save settings**. The app starts the gateway from
+`server/gateway/.venv`; use **Tray → Restart Gateway** after changing model
+settings.
+
+### macOS privacy permissions
+
+For development runs, macOS may show `whispr-desktop`, Terminal, iTerm, or the
+IDE that launched Cargo in its privacy lists.
+
+1. Open **System Settings → Privacy & Security → Microphone**.
+2. Start recording in Whispr so macOS displays the permission prompt, then
+   click **Allow**. Apps cannot be added to the Microphone list manually.
+3. Open **System Settings → Privacy & Security → Accessibility** and click `+`.
+4. In the file picker press **Cmd+Shift+G**, enter the development executable
+   path below, press Return, and add it:
+
+   ```text
+   /path/to/NovaWhisper/target/debug/whispr-desktop
+   ```
+
+5. Enable the switch for `whispr-desktop`, quit the running process, and run
+   `cargo run -p whispr-desktop` again.
+
+Paths to add with the `+` button depend on how Whispr is launched:
+
+| Privacy list | What to add with `+` | Path to enter after **Cmd+Shift+G** |
+|---|---|---|
+| Accessibility — `cargo run` | Development executable | `/path/to/NovaWhisper/target/debug/whispr-desktop` |
+| Accessibility — installed app | Whispr application | `/Applications/Whispr.app` |
+| Input Monitoring — `cargo run` | Start with the development executable; add the launcher too if the hotkey still fails | `/path/to/NovaWhisper/target/debug/whispr-desktop` |
+| Input Monitoring — Terminal launcher | Apple Terminal | `/System/Applications/Utilities/Terminal.app` |
+| Input Monitoring — installed app | Whispr application | `/Applications/Whispr.app` |
+
+Replace `/path/to/NovaWhisper` with the repository's real location. For this
+checkout, for example, the development executable is:
+
+```text
+/Users/dmitry/works/NovaWhisper/target/debug/whispr-desktop
+```
+
+If Cargo is launched from iTerm or an IDE instead of Apple Terminal, add that
+launcher application from `/Applications` when macOS attributes permission to
+it. The **Microphone** privacy page is different: it has no `+` button, so start
+recording and approve the macOS prompt instead.
+
+Accessibility permission lets Whispr paste or type the transcript into the
+focused application. If the global shortcut does not respond, also enable the
+launcher or `whispr-desktop` under **Privacy & Security → Input Monitoring**.
+Camera, Screen Recording, Full Disk Access, and Apple Speech Recognition are
+not required.
+
+If the microphone prompt was previously dismissed and does not return, reset
+it and launch dictation again:
+
+```sh
+tccutil reset Microphone ai.whispr.desktop
+```
+
+### macOS build and DMG
 
 Install the Apple Command Line Tools and Rust, then build the desktop app from
 the repository root:

@@ -12,6 +12,34 @@
   }
   h1 { font-size: 20px; margin: 0 0 2px; }
   .sub { color: #9a9ab0; margin: 0 0 20px; font-size: 13px; }
+  .section {
+    margin: 0 0 22px; padding: 16px; border: 1px solid #303047;
+    border-radius: 14px; background: linear-gradient(145deg, #1c1c2b, #181824);
+  }
+  .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .section-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .section-title h2 { margin: 0; font-size: 15px; }
+  .section-title p { margin: 1px 0 0; color: #85859e; font-size: 11.5px; }
+  .clipboard-icon {
+    display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto;
+    border-radius: 9px; background: #4f46e526; color: #a5a0ff; font-size: 17px;
+  }
+  .section-actions { display: flex; gap: 7px; }
+  button.compact { padding: 6px 10px; border-radius: 7px; font-size: 12px; }
+  button.ghost { background: transparent; color: #aaaac0; border: 1px solid #35354c; }
+  button:disabled { cursor: default; opacity: .42; filter: none; }
+  #clipboardList { display: grid; gap: 8px; margin-top: 13px; max-height: 240px; overflow-y: auto; }
+  .clip-item {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px;
+    align-items: center; padding: 11px 12px; border: 1px solid #2d2d42;
+    border-radius: 10px; background: #14141f;
+  }
+  .clip-text { margin: 0; color: #eeeeF7; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .clip-meta { margin-top: 4px; color: #6f6f89; font-size: 11px; }
+  .clip-copy { min-width: 58px; }
+  .clipboard-empty {
+    padding: 20px 10px 8px; color: #77778f; text-align: center; font-size: 12.5px;
+  }
   label { display: block; margin: 14px 0 4px; font-weight: 600; font-size: 13px; }
   input, select, textarea {
     width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #33334a;
@@ -42,6 +70,23 @@
 <body>
   <h1>Whispr</h1>
   <p class="sub">Voice to text, anywhere. Press the global hotkey in any app to dictate.</p>
+
+  <section class="section" aria-labelledby="clipboardTitle">
+    <div class="section-head">
+      <div class="section-title">
+        <div class="clipboard-icon" aria-hidden="true">▣</div>
+        <div>
+          <h2 id="clipboardTitle">Voice clipboard</h2>
+          <p>Your recent transcripts stay on this Mac.</p>
+        </div>
+      </div>
+      <div class="section-actions">
+        <button id="copyLatest" class="compact" disabled>Copy latest</button>
+        <button id="clearClipboard" class="compact ghost" disabled>Clear</button>
+      </div>
+    </div>
+    <div id="clipboardList" aria-live="polite"></div>
+  </section>
 
   <div class="row">
     <div>
@@ -170,6 +215,99 @@
 
   let config = null;
   let recordingHotkey = false;
+  const HISTORY_KEY = "whispr-transcript-history-v1";
+  const HISTORY_LIMIT = 20;
+  let transcriptHistory = [];
+
+  function loadTranscriptHistory() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+      transcriptHistory = Array.isArray(saved) ? saved.filter((item) => item && item.text).slice(0, HISTORY_LIMIT) : [];
+    } catch (_) {
+      transcriptHistory = [];
+    }
+    renderTranscriptHistory();
+  }
+
+  function saveTranscriptHistory() {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(transcriptHistory));
+  }
+
+  function addTranscript(text, durationMs) {
+    const clean = (text || "").trim();
+    if (!clean) return;
+    transcriptHistory.unshift({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      text: clean,
+      createdAt: Date.now(),
+      durationMs: Number(durationMs) || 0,
+    });
+    transcriptHistory = transcriptHistory.slice(0, HISTORY_LIMIT);
+    saveTranscriptHistory();
+    renderTranscriptHistory();
+  }
+
+  function transcriptMeta(item) {
+    const time = new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const duration = item.durationMs ? ` · ${(item.durationMs / 1000).toFixed(1)}s recording` : "";
+    return `${time}${duration}`;
+  }
+
+  function renderTranscriptHistory() {
+    const list = $("clipboardList");
+    list.replaceChildren();
+    $("copyLatest").disabled = transcriptHistory.length === 0;
+    $("clearClipboard").disabled = transcriptHistory.length === 0;
+    if (!transcriptHistory.length) {
+      const empty = document.createElement("div");
+      empty.className = "clipboard-empty";
+      empty.textContent = "Your completed dictations will appear here.";
+      list.append(empty);
+      return;
+    }
+    for (const item of transcriptHistory) {
+      const row = document.createElement("article");
+      row.className = "clip-item";
+      const content = document.createElement("div");
+      const text = document.createElement("p");
+      text.className = "clip-text";
+      text.textContent = item.text;
+      const meta = document.createElement("div");
+      meta.className = "clip-meta";
+      meta.textContent = transcriptMeta(item);
+      const copy = document.createElement("button");
+      copy.className = "compact secondary clip-copy";
+      copy.textContent = "Copy";
+      copy.dataset.clipId = item.id;
+      content.append(text, meta);
+      row.append(content, copy);
+      list.append(row);
+    }
+  }
+
+  async function copyTranscript(text, button) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const fallback = document.createElement("textarea");
+        fallback.value = text;
+        fallback.style.position = "fixed";
+        fallback.style.opacity = "0";
+        document.body.append(fallback);
+        fallback.select();
+        const copied = document.execCommand("copy");
+        fallback.remove();
+        if (!copied) throw new Error("clipboard access is unavailable");
+      }
+      const previous = button.textContent;
+      button.textContent = "Copied ✓";
+      status("Transcript copied to clipboard.", "ok");
+      setTimeout(() => { button.textContent = previous; }, 1200);
+    } catch (e) {
+      status(`Could not copy transcript: ${e}`, "err");
+    }
+  }
 
   const keyNames = {
     " ": "space",
@@ -313,17 +451,39 @@
     }
   });
 
+  $("clipboardList").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-clip-id]");
+    if (!button) return;
+    const item = transcriptHistory.find((entry) => entry.id === button.dataset.clipId);
+    if (item) copyTranscript(item.text, button);
+  });
+
+  $("copyLatest").addEventListener("click", () => {
+    if (transcriptHistory[0]) copyTranscript(transcriptHistory[0].text, $("copyLatest"));
+  });
+
+  $("clearClipboard").addEventListener("click", () => {
+    transcriptHistory = [];
+    saveTranscriptHistory();
+    renderTranscriptHistory();
+    status("Voice clipboard cleared.");
+  });
+
   listen("whispr://event", ({ payload }) => {
     switch (payload.kind) {
       case "status": log(payload.recording ? "● recording started" : "○ recording stopped"); break;
       case "partial": log(`partial: ${payload.text}`); break;
-      case "final": log(`final (${payload.duration_ms} ms): ${payload.text}`, "ok"); break;
+      case "final":
+        log(`final (${payload.duration_ms} ms): ${payload.text}`, "ok");
+        addTranscript(payload.text, payload.duration_ms);
+        break;
       case "inserted": log(`inserted via ${payload.via}`, "ok"); break;
       case "gateway": log(`gateway: ${payload.message}`, payload.state === "error" ? "err" : payload.state === "ready" ? "ok" : ""); break;
       case "error": log(`error: ${payload.message}`, "err"); break;
     }
   });
 
+  loadTranscriptHistory();
   load().catch((e) => status(`Failed to load config: ${e}`, "err"));
 </script>
 </body>

@@ -60,6 +60,7 @@ pub fn toggle(app: &AppHandle) -> Result<bool, String> {
         }
         session.capture.stop();
         emit(app, json!({"kind": "status", "recording": false}));
+        hide_hud(app);
         Ok(false)
     } else {
         match start(app) {
