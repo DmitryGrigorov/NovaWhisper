@@ -1,15 +1,30 @@
 # NovaWhisper
 
+<div align="center">
+
+**Speak naturally. Keep your flow.**
+
+NovaWhisper turns a global hotkey into fast, private voice-to-text: hold the shortcut, speak in any app, and receive a polished transcript exactly where your cursor is.
+
+**English** · [Русский](README.ru.md)
+
+</div>
+
 > **Windows 11 only.** Run the desktop app from the repository with `cargo run -p whispr-desktop`. Running a copied standalone `.exe` is not supported unless it is packaged with the `whispr-gateway` sidecar.
 
-**English** | [Русский](README.ru.md)
+## See it in action
 
-Cross-platform voice-to-text dictation. Press a global hotkey in any app,
-speak, and the polished transcript is inserted at the cursor.
-
-## Product demo
+### 1. Dictate anywhere
 
 ![NovaWhisper voice dictation demo](assets/ScreenCapture.gif)
+
+### 2. Speak, review, insert
+
+![NovaWhisper recording and transcription flow](assets/1.gif)
+
+### 3. Configure from the tray
+
+![NovaWhisper tray menu and settings](assets/menu.gif)
 
 NovaWhisper runs as two processes:
 
@@ -18,7 +33,8 @@ NovaWhisper runs as two processes:
    and inserts text.
 
 You normally never manage the gateway yourself: the desktop app **starts it
-automatically on launch and stops it when you quit**. It uses the bundled
+automatically on launch and stops the managed process when you close Settings
+or quit**. It uses the bundled
 `whispr-gateway` sidecar (installer builds) or the repo's
 `server/gateway/.venv` (source builds). A gateway you started manually is
 detected, used as-is, and never killed. The behavior is controlled by
