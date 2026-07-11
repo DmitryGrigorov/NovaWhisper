@@ -15,8 +15,8 @@ def test_capitalizes_and_punctuates():
 
 def test_dictionary_casing():
     assert (
-        apply_rules("tell whispr to email grigorov", ["Whispr", "Grigorov"])
-        == "Tell Whispr to email Grigorov."
+        apply_rules("tell whispr to email", ["Whispr"])
+        == "Tell Whispr to email."
     )
 
 

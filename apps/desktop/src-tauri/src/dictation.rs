@@ -1,9 +1,14 @@
 //! Dictation session lifecycle: hotkey toggle -> capture -> stream -> insert.
 
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager};
+
+static HUD_POSITIONED: AtomicBool = AtomicBool::new(false);
 use tokio::sync::{mpsc, oneshot};
 
 use whispr_core::audio::{AudioCapture, CaptureHandle};
@@ -176,7 +181,9 @@ fn finish_session(app: &AppHandle) {
 
 pub fn show_hud(app: &AppHandle) {
     if let Some(hud) = app.get_webview_window("hud") {
-        position_hud(app, &hud);
+        if !HUD_POSITIONED.swap(true, Ordering::Relaxed) {
+            position_hud(app, &hud);
+        }
         let _ = hud.show();
     }
 }

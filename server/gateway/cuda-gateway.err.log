@@ -8,3 +8,5 @@ INFO:     127.0.0.1:59422 - "WebSocket /v1/stream" [accepted]
 INFO:     connection open
 INFO:     127.0.0.1:58516 - "WebSocket /v1/stream" [accepted]
 INFO:     connection open
+INFO:     127.0.0.1:53896 - "WebSocket /v1/stream" [accepted]
+INFO:     connection open

@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Whispr windows: settings UI and dictation HUD",
   "windows": ["main", "hud"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
 }
