@@ -25,14 +25,15 @@ The current Windows/CUDA path was built and tested on:
 |---|---|
 | Operating system | Windows version 25H2, build 26200, 64-bit |
 | Registry product label | Windows 10 Pro (Windows may retain this label for newer builds) |
-| GPU | NVIDIA GeForce RTX 4090, 24 GB VRAM |
+| GPU | NVIDIA GeForce RTX 3060, 12 GB VRAM |
 | NVIDIA driver | 610.74 |
 | Python | 3.14.6 |
 | Rust / Cargo | 1.97.0, MSVC toolchain |
 | Local STT | faster-whisper, multilingual `small`, CUDA `float16` |
 
 Windows 11 is the primary supported Windows target. Linux builds are supported
-with the limitations described below; macOS builds but has not been tested.
+with the limitations described below; macOS builds are supported on Apple
+Silicon using the steps below.
 
 ## Windows installation from a clean PC
 
@@ -157,6 +158,30 @@ cargo run -p whispr-desktop
 ```
 
 Global hotkeys and insertion currently need X11/XWayland on Linux.
+
+## macOS build and DMG
+
+Install the Apple Command Line Tools and Rust, then build the desktop app from
+the repository root:
+
+```sh
+xcode-select --install
+brew install rust
+cargo install tauri-cli --version '^2' --locked
+cargo test --workspace
+cargo tauri build --bundles dmg
+```
+
+The Apple Silicon installer is created at:
+
+```text
+target/release/bundle/dmg/Whispr_0.1.0_aarch64.dmg
+```
+
+The app is not code-signed or notarized yet. On first launch, macOS may require
+you to approve it in **System Settings → Privacy & Security**. Dictation also
+needs **Microphone** and **Accessibility** permission. As on Windows, keep the
+Python gateway running and configure `ws://127.0.0.1:8765/v1/stream`.
 
 ## Verification
 

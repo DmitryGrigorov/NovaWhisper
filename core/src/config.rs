@@ -22,6 +22,8 @@ pub struct AppConfig {
     pub insert_method: String,
     /// Audio chunk size sent over the wire, in ms.
     pub chunk_ms: u32,
+    /// Input device name, or `None` to follow the system default.
+    pub microphone: Option<String>,
     /// End the utterance automatically after trailing silence.
     pub auto_stop: bool,
     pub dictionary: Vec<String>,
@@ -37,6 +39,7 @@ impl Default for AppConfig {
             polish_mode: "fillers".into(),
             insert_method: "auto".into(),
             chunk_ms: 100,
+            microphone: None,
             auto_stop: false,
             dictionary: Vec::new(),
             snippets: Vec::new(),
@@ -77,5 +80,16 @@ impl AppConfig {
         }
         std::fs::write(&path, serde_json::to_string_pretty(self)?)
             .with_context(|| format!("failed to write {}", path.display()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_config_uses_system_default_microphone() {
+        let config: AppConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(config.microphone, None);
     }
 }

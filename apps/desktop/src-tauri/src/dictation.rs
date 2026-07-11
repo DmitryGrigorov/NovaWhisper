@@ -19,6 +19,25 @@ use whispr_insert::InsertMethod;
 
 pub const EVENT: &str = "whispr://event";
 
+/// Run input synthesis on the application main queue. On macOS Enigo reads
+/// the current HIToolbox keyboard layout, whose API traps when called from a
+/// Tokio worker thread.
+pub async fn insert_text(
+    app: &AppHandle,
+    text: String,
+    method: InsertMethod,
+) -> Result<whispr_insert::InsertedVia, String> {
+    let (tx, rx) = oneshot::channel();
+    app.run_on_main_thread(move || {
+        let result = whispr_insert::insert_text(&text, method).map_err(|e| e.to_string());
+        let _ = tx.send(result);
+    })
+    .map_err(|e| format!("cannot schedule insertion: {e}"))?;
+
+    rx.await
+        .map_err(|_| "insertion ended without returning a result".to_string())?
+}
+
 #[derive(Default)]
 pub struct DictationState(pub Mutex<Option<ActiveSession>>);
 
@@ -60,7 +79,7 @@ pub fn toggle(app: &AppHandle) -> Result<bool, String> {
 fn start(app: &AppHandle) -> Result<ActiveSession, String> {
     let cfg = AppConfig::load();
 
-    let mut capture = AudioCapture::start(cfg.chunk_ms)
+    let mut capture = AudioCapture::start(cfg.chunk_ms, cfg.microphone.as_deref())
         .map_err(|e| format!("microphone unavailable: {e}"))?;
     let audio_rx = std::mem::replace(&mut capture.audio_rx, mpsc::channel(1).1);
     let level = capture.level_probe();
@@ -113,23 +132,14 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                     );
                     finish_session(&event_app);
                     if !final_text.is_empty() {
-                        let to_insert = final_text.clone();
-                        let inserted = tauri::async_runtime::spawn_blocking(move || {
-                            whispr_insert::insert_text(&to_insert, insert_method)
-                        })
-                        .await;
-                        match inserted {
-                            Ok(Ok(via)) => emit(
+                        match insert_text(&event_app, final_text.clone(), insert_method).await {
+                            Ok(via) => emit(
                                 &event_app,
                                 json!({"kind": "inserted", "via": format!("{via:?}")}),
                             ),
-                            Ok(Err(e)) => emit(
-                                &event_app,
-                                json!({"kind": "error", "message": format!("insertion failed: {e}")}),
-                            ),
                             Err(e) => emit(
                                 &event_app,
-                                json!({"kind": "error", "message": format!("insertion task failed: {e}")}),
+                                json!({"kind": "error", "message": format!("insertion failed: {e}")}),
                             ),
                         }
                     }

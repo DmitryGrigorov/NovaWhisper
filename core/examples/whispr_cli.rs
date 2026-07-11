@@ -123,7 +123,7 @@ async fn main() -> Result<()> {
         stream_utterance(&args.url, start, audio_rx, stop_rx, events_tx).await?;
         feeder.await?;
     } else if args.mic {
-        let mut capture = AudioCapture::start(100)?;
+        let mut capture = AudioCapture::start(100, None)?;
         eprintln!("recording from microphone for {}s...", args.seconds);
         let audio_rx = std::mem::replace(&mut capture.audio_rx, mpsc::channel(1).1);
         tokio::spawn(async move {

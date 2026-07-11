@@ -16,6 +16,11 @@ fn get_config() -> AppConfig {
 }
 
 #[tauri::command]
+fn list_microphones() -> Result<Vec<String>, String> {
+    whispr_core::audio::AudioCapture::input_devices().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
     let previous = AppConfig::load();
     config.save().map_err(|e| e.to_string())?;
@@ -36,15 +41,11 @@ fn toggle_dictation(app: AppHandle) -> Result<bool, String> {
 /// Settings-page helper: waits so the user can focus a target field, then
 /// inserts sample text through the real insertion path.
 #[tauri::command]
-async fn test_insert(text: String, method: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        std::thread::sleep(std::time::Duration::from_secs(3));
-        whispr_insert::insert_text(&text, whispr_insert::InsertMethod::parse(&method))
-            .map(|via| format!("{via:?}"))
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+async fn test_insert(app: AppHandle, text: String, method: String) -> Result<String, String> {
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    dictation::insert_text(&app, text, whispr_insert::InsertMethod::parse(&method))
+        .await
+        .map(|via| format!("{via:?}"))
 }
 
 fn register_hotkey(app: &AppHandle, hotkey: &str) -> Result<(), String> {
@@ -82,6 +83,7 @@ fn main() {
         .manage(DictationState::default())
         .invoke_handler(tauri::generate_handler![
             get_config,
+            list_microphones,
             save_config,
             toggle_dictation,
             test_insert

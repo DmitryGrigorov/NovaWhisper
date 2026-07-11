@@ -52,6 +52,12 @@
     </div>
   </div>
 
+  <label for="microphone">Microphone</label>
+  <select id="microphone">
+    <option value="">System default</option>
+  </select>
+  <div class="hint">The selected microphone is used the next time dictation starts.</div>
+
   <div class="row">
     <div>
       <label for="language">Language</label>
@@ -120,6 +126,21 @@
     $("language").value = config.language;
     $("polish_mode").value = config.polish_mode;
     $("insert_method").value = config.insert_method;
+    const microphones = await invoke("list_microphones");
+    const selectedMicrophone = config.microphone || "";
+    for (const name of microphones) {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      $("microphone").append(option);
+    }
+    if (selectedMicrophone && !microphones.includes(selectedMicrophone)) {
+      const option = document.createElement("option");
+      option.value = selectedMicrophone;
+      option.textContent = `${selectedMicrophone} (unavailable)`;
+      $("microphone").append(option);
+    }
+    $("microphone").value = selectedMicrophone;
     $("dictionary").value = (config.dictionary || []).join("\n");
     $("snippets").value = (config.snippets || [])
       .map((s) => `${s.trigger} :: ${s.expansion.replaceAll("\n", "\\n")}`)
@@ -133,6 +154,7 @@
       config.language = $("language").value;
       config.polish_mode = $("polish_mode").value;
       config.insert_method = $("insert_method").value;
+      config.microphone = $("microphone").value || null;
       config.dictionary = $("dictionary").value.split("\n").map(s => s.trim()).filter(Boolean);
       config.snippets = $("snippets").value.split("\n").map(s => s.trim()).filter(Boolean)
         .map((line) => {

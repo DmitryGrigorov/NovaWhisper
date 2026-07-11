@@ -107,19 +107,40 @@ impl LevelProbe {
 pub struct AudioCapture;
 
 impl AudioCapture {
-    /// Start capturing from the default input device, delivering 16 kHz mono
-    /// i16 chunks of `chunk_ms` milliseconds each.
-    pub fn start(chunk_ms: u32) -> Result<CaptureHandle> {
+    /// Return the input-device names exposed by the system audio host.
+    pub fn input_devices() -> Result<Vec<String>> {
+        let host = cpal::default_host();
+        let mut names = host
+            .input_devices()
+            .context("failed to enumerate input audio devices")?
+            .filter_map(|device| device.name().ok())
+            .collect::<Vec<_>>();
+        names.sort();
+        names.dedup();
+        Ok(names)
+    }
+
+    /// Start capturing from the selected input device, or the system default
+    /// when `device_name` is `None`.
+    pub fn start(chunk_ms: u32, device_name: Option<&str>) -> Result<CaptureHandle> {
         let (audio_tx, audio_rx) = mpsc::channel::<Vec<i16>>(128);
         let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
         let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<()>>();
         let level_bits = Arc::new(AtomicU32::new(0));
         let level_for_thread = level_bits.clone();
 
+        let device_name = device_name.map(str::to_owned);
         let join = std::thread::Builder::new()
             .name("whispr-capture".into())
             .spawn(move || {
-                capture_thread(chunk_ms, audio_tx, stop_rx, ready_tx, level_for_thread);
+                capture_thread(
+                    chunk_ms,
+                    device_name,
+                    audio_tx,
+                    stop_rx,
+                    ready_tx,
+                    level_for_thread,
+                );
             })
             .context("failed to spawn capture thread")?;
 
@@ -141,16 +162,24 @@ impl AudioCapture {
 
 fn capture_thread(
     chunk_ms: u32,
+    device_name: Option<String>,
     audio_tx: mpsc::Sender<Vec<i16>>,
     stop_rx: std::sync::mpsc::Receiver<()>,
     ready_tx: std::sync::mpsc::Sender<Result<()>>,
     level_bits: Arc<AtomicU32>,
 ) {
-    let build = || -> Result<(cpal::Stream, u32)> {
+    let build = || -> Result<(cpal::Stream, u32, String)> {
         let host = cpal::default_host();
-        let device = host
-            .default_input_device()
-            .ok_or_else(|| anyhow!("no input audio device found"))?;
+        let device = if let Some(name) = device_name.as_deref() {
+            host.input_devices()
+                .context("failed to enumerate input audio devices")?
+                .find(|device| device.name().ok().as_deref() == Some(name))
+                .ok_or_else(|| anyhow!("selected input device {name:?} is unavailable"))?
+        } else {
+            host.default_input_device()
+                .ok_or_else(|| anyhow!("no input audio device found"))?
+        };
+        let active_device_name = device.name().unwrap_or_else(|_| "unknown".into());
         let config = device
             .default_input_config()
             .context("no default input config")?;
@@ -219,12 +248,12 @@ fn capture_thread(
             other => return Err(anyhow!("unsupported sample format {other:?}")),
         };
         stream.play().context("failed to start input stream")?;
-        Ok((stream, src_rate))
+        Ok((stream, src_rate, active_device_name))
     };
 
     match build() {
-        Ok((stream, src_rate)) => {
-            tracing::info!("capture started (device rate {src_rate} Hz)");
+        Ok((stream, src_rate, active_device_name)) => {
+            tracing::info!("capture started ({active_device_name}, {src_rate} Hz)");
             let _ = ready_tx.send(Ok(()));
             // Hold the stream alive until stop is requested or all receivers
             // are gone.

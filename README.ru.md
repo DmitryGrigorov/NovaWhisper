@@ -26,7 +26,7 @@ Desktop `.exe` не распознаёт речь самостоятельно: 
 |---|---|
 | Операционная система | Windows, версия 25H2, сборка 26200, 64-bit |
 | Название в реестре | Windows 10 Pro (Windows может сохранять старое название для новых сборок) |
-| Видеокарта | NVIDIA GeForce RTX 4090, 24 ГБ VRAM |
+| Видеокарта | NVIDIA GeForce RTX 3060, 12 ГБ VRAM |
 | Драйвер NVIDIA | 610.74 |
 | Python | 3.14.6 |
 | Rust / Cargo | 1.97.0, toolchain MSVC |
