@@ -4,7 +4,8 @@ No audio leaves the machine. On an RTX-class NVIDIA GPU with CUDA, large-v3
 models transcribe many times faster than real time.
 
 Env:
-  WHISPR_WHISPER_MODEL    model name or CTranslate2 dir (default large-v3-turbo)
+  WHISPR_WHISPER_MODEL    model name or CTranslate2 dir (default large-v3,
+                          i.e. Systran/faster-whisper-large-v3)
   WHISPR_WHISPER_DEVICE   cuda | cpu | auto (default auto)
   WHISPR_WHISPER_COMPUTE  float16 | int8_float16 | int8 | default (default: default)
 
@@ -58,7 +59,7 @@ def _configure_windows_cuda_dlls() -> None:
 
 def _model_config() -> tuple[str, str, str]:
     return (
-        os.environ.get("WHISPR_WHISPER_MODEL", "large-v3-turbo"),
+        os.environ.get("WHISPR_WHISPER_MODEL", "large-v3"),
         os.environ.get("WHISPR_WHISPER_DEVICE", "auto"),
         os.environ.get("WHISPR_WHISPER_COMPUTE", "default"),
     )

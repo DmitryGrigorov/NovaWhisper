@@ -9,6 +9,8 @@ when to touch it. See [SKILLS.md](SKILLS.md) for task recipes and
 ```
 Desktop app (Rust/Tauri)                Gateway (Python/FastAPI)
 ─────────────────────────               ────────────────────────
+app start/exit ──► gateway.rs ──spawn/kill──► uvicorn app.main:app
+                     (skipped if a gateway already answers /healthz)
 hotkey ──► dictation.rs                 /v1/stream (WebSocket)
              │ AudioCapture (cpal)        │ SttSession (mock | whisper_local | deepgram)
              │ 16kHz PCM chunks           │   partial_queue ──► "partial" frames
@@ -45,9 +47,11 @@ hotkey ──► dictation.rs                 /v1/stream (WebSocket)
 
 | File | What it is | Touch it when |
 |---|---|---|
-| `src-tauri/src/main.rs` | Tauri builder: tray menu, global-shortcut plugin + registration, window creation (settings `main`, HUD `hud`), commands `get_config`/`save_config`/`toggle_dictation`/`test_insert` | New commands, windows, tray items |
+| `src-tauri/src/main.rs` | Tauri builder: tray menu (incl. Restart Gateway), global-shortcut plugin + registration, window creation (settings `main`, HUD `hud`), commands `get_config`/`save_config`/`toggle_dictation`/`test_insert`, SIGTERM/SIGINT → clean exit, `RunEvent::Exit` → gateway shutdown | New commands, windows, tray items |
 | `src-tauri/src/dictation.rs` | Session state machine: `toggle()` start/stop, capture → stream → events → snippet expand → insert; HUD show/hide/position; emits `whispr://event` | Dictation flow, event payloads — **sync point** with UI |
-| `src-tauri/tauri.conf.json` | App config: `frontendDist: "../ui"`, `withGlobalTauri: true`, bundle icons | Windows/bundle/config changes |
+| `src-tauri/src/gateway.rs` | Managed-gateway supervisor: health-check, discovery (`WHISPR_GATEWAY_BIN` → bundled `whispr-gateway` sidecar → repo `.venv` → PATH python), spawn with `WHISPR_*` env from config, log to `config_dir/whispr/gateway.log`, kill process tree on exit/restart. Never kills an externally started gateway | Gateway lifecycle, discovery order, sidecar layout |
+| `src-tauri/tauri.conf.json` | App config: `frontendDist: "../ui"`, `withGlobalTauri: true`, bundle icons + `resources: ["gateway/**/*"]` (sidecar staging); per-OS targets in `tauri.windows.conf.json` (nsis) / `tauri.macos.conf.json` (dmg) | Windows/bundle/config changes |
+| `src-tauri/gateway/` | Staging dir for the PyInstaller gateway sidecar (built by `scripts/build-gateway.*`, gitignored except README.txt) | Packaging changes |
 | `src-tauri/capabilities/default.json` | IPC permissions for windows `main` + `hud` (`core:default`) | Adding a window (add its label here) or JS plugin APIs |
 | `src-tauri/icons/` | Generated PNGs (script: scratchpad `make_icons.py`, checked-in output) | Rebranding |
 | `ui/index.html` | Settings page (vanilla JS, `window.__TAURI__`): loads/saves `AppConfig`, event log | New settings — field ids mirror `AppConfig` keys |
@@ -60,10 +64,11 @@ hotkey ──► dictation.rs                 /v1/stream (WebSocket)
 | `app/main.py` | WS `/v1/stream` endpoint (start → audio frames → stop → final), `/healthz`, lifespan preloads local Whisper | Protocol changes — **sync point** |
 | `app/providers/base.py` | `SttSession` ABC: `start()/feed()/finish()` + `partial_queue` (`None` = end sentinel) | Provider interface changes |
 | `app/providers/mock.py` | Offline provider: reveals canned transcript ~2.5 words/sec of audio (`WHISPR_MOCK_TRANSCRIPT`) | Test/dev behavior |
-| `app/providers/whisper_local.py` | faster-whisper on local GPU/CPU; 1 s incremental partial decodes (beam 1), final beam 5; module-level model cache | Local STT tuning |
+| `app/providers/whisper_local.py` | faster-whisper on local GPU/CPU (default model `large-v3`); 1 s incremental partial decodes (beam 1), final beam 5; module-level model cache | Local STT tuning |
 | `app/providers/deepgram.py` | Deepgram streaming WS client (untested against live API — no key in dev) | Cloud STT |
 | `app/providers/__init__.py` | `resolve_provider_name()` (env override → deepgram-if-key → whisper-if-installed → mock) + `create_session()` | Registering a provider |
 | `app/polish.py` | `apply_rules()` (fillers, stutters, casing, punctuation, dictionary casing) and `llm_polish()` (Claude `claude-haiku-4-5`, prompt-cached system block, falls back to rules on any failure) | Polish behavior, prompts |
+| `run_gateway.py` | Console/frozen entry point (`--host/--port`); what the PyInstaller sidecar executes | Sidecar CLI changes |
 | `tests/` | `test_polish.py` (rules), `test_providers.py` (selection), `test_stream.py` (WS end-to-end with mock) | Any gateway change — keep green |
 | `requirements.txt` / `requirements-local.txt` | Base deps / optional faster-whisper | Dependency changes |
 
@@ -72,6 +77,7 @@ hotkey ──► dictation.rs                 /v1/stream (WebSocket)
 | Path | What it is |
 |---|---|
 | `shared/protocol.md` | **Normative** wire-protocol spec — update first, then the two implementations |
+| `scripts/build-gateway.sh` / `.ps1` | Build the self-contained gateway sidecar (PyInstaller onedir) into `apps/desktop/src-tauri/gateway/` for bundling |
 | `docs/ARCHITECTURE.md` | Founding plan: stack decisions, P0–P2 roadmap, risk register (R-1…R-8) |
 | `docs/SKILLS.md` | Task recipes for common changes |
 | `Cargo.toml` (root) | Workspace: `core`, `platform/insert`, `apps/desktop/src-tauri` |
@@ -84,12 +90,14 @@ hotkey ──► dictation.rs                 /v1/stream (WebSocket)
    s16le, 16 kHz, mono, binary WS frames; control messages are JSON text
    frames tagged by `"type"`.
 2. **Desktop event contract**: Rust emits Tauri event `whispr://event` with
-   `kind` ∈ `status{recording} | ready | partial{text} | final{text,raw_text,duration_ms} | inserted{via} | error{message} | level{value}`.
-   Consumers: `ui/hud.html`, `ui/index.html`. Change in `dictation.rs` → update both pages.
+   `kind` ∈ `status{recording} | ready | partial{text} | final{text,raw_text,duration_ms} | inserted{via} | error{message} | level{value} | gateway{state,message}`.
+   Consumers: `ui/hud.html`, `ui/index.html`. Change in `dictation.rs` or
+   `gateway.rs` → update both pages (unknown kinds are ignored by the HUD).
 3. **Config field names**: `AppConfig` serde keys == element ids in
    `ui/index.html` (`gateway_url`, `hotkey`, `language`, `polish_mode`,
-   `insert_method`, `dictionary`, `snippets`). New fields need
-   `#[serde(default)]`-compatible defaults so old config files keep loading.
+   `insert_method`, `manage_gateway`, `stt_provider`, `whisper_model`,
+   `whisper_device`, `whisper_compute`, `dictionary`, `snippets`). New fields
+   need `#[serde(default)]`-compatible defaults so old config files keep loading.
 4. **Provider contract**: exactly one `None` pushed to `partial_queue` when
    the session ends (the gateway's forwarder task blocks on it).
 5. **cpal `Stream` is `!Send`** — it must stay on the dedicated capture
@@ -104,6 +112,8 @@ hotkey ──► dictation.rs                 /v1/stream (WebSocket)
 - Audio is uncompressed PCM (Opus planned).
 - Deepgram provider and `llm_polish` are implemented but not exercised against
   live APIs in CI.
+- PyInstaller sidecar builds (`scripts/build-gateway.*`) are per-OS and not
+  exercised in CI; the venv/dev discovery path is what tests cover.
 - Linux Wayland: global hotkey and enigo-paste need X11/XWayland (see R-3 in
   ARCHITECTURE.md).
 - No mobile apps, no sync service yet (P1/P2).

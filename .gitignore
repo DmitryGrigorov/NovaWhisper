@@ -4,8 +4,12 @@ dist/
 __pycache__/
 *.pyc
 .venv/
+.venv-build/
 venv/
 .env
 *.sqlite3
 .DS_Store
 apps/desktop/src-tauri/gen/
+# PyInstaller gateway sidecar staging (built by scripts/build-gateway.*)
+apps/desktop/src-tauri/gateway/*
+!apps/desktop/src-tauri/gateway/README.txt

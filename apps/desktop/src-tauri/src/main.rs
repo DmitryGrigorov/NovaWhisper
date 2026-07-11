@@ -1,10 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod dictation;
+mod gateway;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use dictation::DictationState;
@@ -29,6 +30,15 @@ fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
             .unregister_all()
             .map_err(|e| e.to_string())?;
         register_hotkey(&app, &config.hotkey)?;
+    }
+    let gateway_changed = previous.manage_gateway != config.manage_gateway
+        || previous.gateway_url != config.gateway_url
+        || previous.stt_provider != config.stt_provider
+        || previous.whisper_model != config.whisper_model
+        || previous.whisper_device != config.whisper_device
+        || previous.whisper_compute != config.whisper_compute;
+    if gateway_changed {
+        gateway::restart(&app);
     }
     Ok(())
 }
@@ -81,6 +91,7 @@ fn main() {
                 .build(),
         )
         .manage(DictationState::default())
+        .manage(gateway::GatewayState::default())
         .invoke_handler(tauri::generate_handler![
             get_config,
             list_microphones,
@@ -125,8 +136,11 @@ fn main() {
                 MenuItem::with_id(app, "toggle", "Start/Stop Dictation", true, None::<&str>)?;
             let settings_item =
                 MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+            let gateway_item =
+                MenuItem::with_id(app, "restart-gateway", "Restart Gateway", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit Whispr", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&toggle_item, &settings_item, &quit_item])?;
+            let menu =
+                Menu::with_items(app, &[&toggle_item, &settings_item, &gateway_item, &quit_item])?;
 
             TrayIconBuilder::with_id("whispr-tray")
                 .icon(app.default_window_icon().unwrap().clone())
@@ -145,6 +159,7 @@ fn main() {
                             let _ = win.set_focus();
                         }
                     }
+                    "restart-gateway" => gateway::restart(app),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -155,8 +170,37 @@ fn main() {
                 tracing::warn!("{e}");
             }
 
+            // Bring up the local gateway with the app (no manual Python).
+            gateway::ensure(handle);
+
+            // Terminal/systemd kills should still stop the managed gateway:
+            // route SIGINT/SIGTERM through the normal exit path.
+            #[cfg(unix)]
+            {
+                let handle = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    use tokio::signal::unix::{signal, SignalKind};
+                    let (Ok(mut term), Ok(mut int)) =
+                        (signal(SignalKind::terminate()), signal(SignalKind::interrupt()))
+                    else {
+                        return;
+                    };
+                    tokio::select! {
+                        _ = term.recv() => {}
+                        _ = int.recv() => {}
+                    }
+                    handle.exit(0);
+                });
+            }
+
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("failed to run Whispr");
+        .build(tauri::generate_context!())
+        .expect("failed to run Whispr")
+        .run(|app, event| {
+            // Fires for tray Quit, app.exit() and (via the signal task) SIGTERM.
+            if let RunEvent::Exit = event {
+                gateway::shutdown(app);
+            }
+        });
 }

@@ -3,7 +3,9 @@
 Cross-platform voice-to-text dictation (Wispr Flow alternative): Tauri 2 + Rust
 desktop app streams mic audio to a FastAPI gateway (WebSocket), which runs STT
 (local Whisper / Deepgram / offline mock) and polishes the transcript, then the
-app types the result into the focused application.
+app types the result into the focused application. The app starts/stops the
+gateway itself (`apps/desktop/src-tauri/src/gateway.rs`): bundled sidecar or
+repo `.venv`; an externally started gateway is used but never killed.
 
 **Read before changing code:**
 
@@ -34,5 +36,6 @@ cargo check -p whispr-core -p whispr-insert --target x86_64-pc-windows-gnu  # Wi
    input id in `apps/desktop/ui/index.html`.
 6. Before done: both test suites green + the no-mic E2E check in SKILLS.md.
 
-Primary target machine: Windows 11 + RTX 4090 (local GPU Whisper,
-`large-v3-turbo`). Dev container is Linux; GUI verified via xvfb.
+Primary target machine: Windows 11 + NVIDIA GPU (local GPU Whisper,
+`large-v3` = `Systran/faster-whisper-large-v3`). Dev container is Linux;
+GUI verified via xvfb.

@@ -26,6 +26,18 @@ pub struct AppConfig {
     pub microphone: Option<String>,
     /// End the utterance automatically after trailing silence.
     pub auto_stop: bool,
+    /// Start and stop the local gateway together with the app (loopback
+    /// gateway_url only). An already-running gateway is detected and left alone.
+    pub manage_gateway: bool,
+    /// STT provider for the managed gateway: "auto" | "whisper_local" |
+    /// "deepgram" | "mock". "auto" lets the gateway pick the best available.
+    pub stt_provider: String,
+    /// faster-whisper model name or CTranslate2 dir for the managed gateway.
+    pub whisper_model: String,
+    /// Whisper device: "auto" | "cuda" | "cpu".
+    pub whisper_device: String,
+    /// Whisper compute type: "default" | "float16" | "int8_float16" | "int8".
+    pub whisper_compute: String,
     pub dictionary: Vec<String>,
     pub snippets: Vec<Snippet>,
 }
@@ -41,6 +53,11 @@ impl Default for AppConfig {
             chunk_ms: 100,
             microphone: None,
             auto_stop: false,
+            manage_gateway: true,
+            stt_provider: "auto".into(),
+            whisper_model: "large-v3".into(),
+            whisper_device: "auto".into(),
+            whisper_compute: "default".into(),
             dictionary: Vec::new(),
             snippets: Vec::new(),
         }
@@ -91,5 +108,15 @@ mod tests {
     fn old_config_uses_system_default_microphone() {
         let config: AppConfig = serde_json::from_str("{}").unwrap();
         assert_eq!(config.microphone, None);
+    }
+
+    #[test]
+    fn old_config_gets_gateway_management_defaults() {
+        let config: AppConfig = serde_json::from_str("{}").unwrap();
+        assert!(config.manage_gateway);
+        assert_eq!(config.stt_provider, "auto");
+        assert_eq!(config.whisper_model, "large-v3");
+        assert_eq!(config.whisper_device, "auto");
+        assert_eq!(config.whisper_compute, "default");
     }
 }

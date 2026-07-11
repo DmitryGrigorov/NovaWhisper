@@ -16,7 +16,13 @@ NovaWhisper состоит из двух процессов:
 2. Rust/Tauri **desktop-приложение** записывает микрофон, показывает HUD и
    вставляет текст.
 
-Desktop `.exe` не распознаёт речь самостоятельно: gateway должен быть запущен.
+Управлять gateway вручную обычно не нужно: приложение **запускает его
+автоматически при старте и останавливает при выходе**. Используется либо
+встроенный sidecar `whispr-gateway` (сборки-установщики), либо
+`server/gateway/.venv` из репозитория (сборка из исходников). Уже запущенный
+вручную gateway приложение обнаруживает, использует и никогда не убивает.
+Поведение включается настройкой «Start & stop the local gateway with the app»,
+вывод gateway пишется в `gateway.log` рядом с `config.json`.
 
 ## Проверенное оборудование и система
 
@@ -28,9 +34,9 @@ Desktop `.exe` не распознаёт речь самостоятельно: 
 | Название в реестре | Windows 10 Pro (Windows может сохранять старое название для новых сборок) |
 | Видеокарта | NVIDIA GeForce RTX 3060, 12 ГБ VRAM |
 | Драйвер NVIDIA | 610.74 |
-| Python | 3.14.6 |
+| Python | 3.12 (используйте 3.11–3.13 — для самых новых версий Python колёса CTranslate2 выходят с задержкой, и `pip install faster-whisper` может не сработать) |
 | Rust / Cargo | 1.97.0, toolchain MSVC |
-| Локальное распознавание | faster-whisper, мультиязычная `small`, CUDA `float16` |
+| Локальное распознавание | faster-whisper, мультиязычная `large-v3` (`Systran/faster-whisper-large-v3`), CUDA `float16` |
 
 Основная поддерживаемая Windows-цель — Windows 11. Linux собирается с
 ограничениями, указанными ниже; macOS собирается, но пока не тестировалась.
@@ -40,7 +46,8 @@ Desktop `.exe` не распознаёт речь самостоятельно: 
 ### 1. Установите необходимые программы
 
 - [Git for Windows](https://git-scm.com/download/win)
-- [Python 3.11+](https://www.python.org/downloads/) с опцией **Add Python to PATH**
+- [Python 3.11–3.13](https://www.python.org/downloads/) с опцией **Add Python to PATH**
+  (рекомендуется 3.12; для самого нового Python может не быть колёс CTranslate2)
 - [Rust через rustup](https://rustup.rs/) со стандартным MSVC toolchain
 - [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
   с workload **Desktop development with C++**
@@ -69,43 +76,22 @@ cuDNN 9 DLL внутрь виртуального окружения. Полны
 нужен — достаточно рабочего NVIDIA-драйвера. Gateway автоматически добавляет
 каталоги этих DLL на Windows.
 
-### 3. Загрузите модель с поддержкой русского языка
+### 3. Загрузите мультиязычную модель (необязательно)
 
-При первом запуске модель скачивается автоматически. Если фоновая загрузка
-Hugging Face зависает, заранее скачайте проверенную мультиязычную `small`:
+При первом запуске gateway модель скачивается автоматически. Если фоновая
+загрузка Hugging Face зависает, заранее скачайте мультиязычную `large-v3`
+(≈3 ГБ), используемую по умолчанию:
 
 ```powershell
 $env:HF_HUB_DISABLE_XET = "1"
-.\.venv\Scripts\python.exe -c "from huggingface_hub import snapshot_download; print(snapshot_download('Systran/faster-whisper-small'))"
+.\.venv\Scripts\python.exe -c "from huggingface_hub import snapshot_download; print(snapshot_download('Systran/faster-whisper-large-v3'))"
 ```
 
-`small` поддерживает русский язык и быстро работает на CUDA. Модель
-`large-v3-turbo` может дать более высокое качество, но требует больше места,
-трафика и времени при первом запуске.
+`large-v3` поддерживает русский (и ещё ~100 языков) с максимальным качеством
+Whisper; на GPU уровня RTX распознаёт быстрее реального времени. На машинах с
+малым объёмом VRAM или без GPU выберите в Settings модель `small`.
 
-### 4. Запустите CUDA gateway
-
-Откройте PowerShell и не закрывайте его:
-
-```powershell
-cd NovaWhisper\server\gateway
-$env:HF_HUB_DISABLE_XET = "1"
-$env:WHISPR_STT_PROVIDER = "whisper_local"
-$env:WHISPR_WHISPER_MODEL = "small"
-$env:WHISPR_WHISPER_DEVICE = "cuda"
-$env:WHISPR_WHISPER_COMPUTE = "float16"
-.\.venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8765
-```
-
-Проверьте gateway из другого окна PowerShell:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8765/healthz
-```
-
-Ожидаемый ответ: `status : ok`.
-
-### 5. Соберите и запустите EXE
+### 4. Соберите и запустите приложение
 
 ```powershell
 cd NovaWhisper
@@ -113,28 +99,84 @@ cargo build --release -p whispr-desktop
 .\target\release\whispr-desktop.exe
 ```
 
-Готовый standalone `.exe` находится здесь:
+При запуске приложение **само стартует gateway** из `server\gateway\.venv`
+(по умолчанию: локальный Whisper `large-v3`, CUDA) и останавливает его при
+выходе. Журнал событий внизу окна Settings показывает `gateway: starting… /
+ready`. В меню трея есть **Restart Gateway**; лог gateway лежит в
+`%APPDATA%\whispr\gateway.log`.
 
-```text
-NovaWhisper\target\release\whispr-desktop.exe
+Проверка из терминала:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8765/healthz
 ```
 
-Установщик не требуется: `.exe` можно скопировать в удобную папку. При этом
-Python gateway всё равно должен быть установлен и запущен. Для разработки
-используйте `cargo run -p whispr-desktop`.
+Ожидаемый ответ: `status : ok`.
 
-### 6. Настройте голосовой ввод
+Standalone-файл — `NovaWhisper\target\release\whispr-desktop.exe`. Если вы
+копируете его за пределы репозитория, положите рядом папку sidecar
+`whispr-gateway` (см. «Автономные установщики» ниже) — иначе приложению нечего
+запускать. Команда для разработки: `cargo run -p whispr-desktop`.
 
-1. Оставьте gateway запущенным.
-2. В Settings укажите `ws://127.0.0.1:8765/v1/stream`.
-3. Выберите **Russian (Русский)** либо **Auto-detect**.
-4. Поставьте курсор в текстовое поле и нажмите настроенную горячую клавишу.
-5. Произнесите текст и снова нажмите горячую клавишу для завершения и вставки.
-6. Индикатор записи можно перемещать по экрану мышью.
+### 5. Настройте голосовой ввод
 
-Настройки находятся в `%APPDATA%\whispr\config.json`.
+1. В Settings укажите `ws://127.0.0.1:8765/v1/stream` (по умолчанию).
+2. Выберите **Russian (Русский)** либо **Auto-detect**.
+3. Поставьте курсор в текстовое поле и нажмите настроенную горячую клавишу.
+4. Произнесите текст и снова нажмите горячую клавишу для завершения и вставки.
+5. Индикатор записи можно перемещать по экрану мышью.
+
+Настройки находятся в `%APPDATA%\whispr\config.json`. Провайдер, модель
+Whisper, устройство и тип вычислений задаются в Settings — после сохранения
+управляемый gateway перезапускается с новыми значениями.
+
+### Ручной запуск gateway (необязательно, для отладки)
+
+Уже запущенный gateway приложение обнаруживает и не трогает, поэтому его
+по-прежнему можно запустить вручную:
+
+```powershell
+cd NovaWhisper\server\gateway
+$env:HF_HUB_DISABLE_XET = "1"
+$env:WHISPR_STT_PROVIDER = "whisper_local"
+$env:WHISPR_WHISPER_MODEL = "large-v3"
+$env:WHISPR_WHISPER_DEVICE = "cuda"
+$env:WHISPR_WHISPER_COMPUTE = "float16"
+.\.venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8765
+```
+
+## Автономные установщики (setup .exe / .dmg / .deb)
+
+Чтобы собрать пакет, которому **не нужен Python** на целевой машине, gateway
+замораживается в sidecar `whispr-gateway` (PyInstaller) и попадает внутрь
+установщика; приложение запускает и останавливает его автоматически.
+
+```sh
+# 1. Соберите sidecar — на той ОС, для которой собираете пакет
+./scripts/build-gateway.sh      # macOS / Linux
+scripts\build-gateway.ps1       # Windows (CUDA DLL включаются автоматически)
+
+# 2. Соберите приложение и установщик
+cargo install tauri-cli --version '^2' --locked   # один раз
+cargo tauri build               # Windows: NSIS setup .exe · Linux: .deb + .AppImage · macOS: .dmg
+```
+
+Установщики появляются в `target/release/bundle/`. Замечания:
+
+- Windows-sidecar с CUDA включает cuBLAS/cuDNN и занимает несколько ГБ; если
+  сборка NSIS-установщика падает из-за размера, используйте портативный
+  вариант: положите `whispr-desktop.exe` и папку `whispr-gateway` рядом в один
+  каталог — приложение находит sidecar рядом со своим exe.
+- Порядок поиска gateway при старте: переменная `WHISPR_GATEWAY_BIN` →
+  `whispr-gateway` рядом с exe или в ресурсах пакета → `server/gateway` с
+  `.venv` из репозитория → `python`/`python3` из PATH. Если ничего не найдено,
+  журнал событий в Settings сообщит об этом.
 
 ## Запуск на CPU без NVIDIA
+
+В Settings: устройство Whisper — **CPU**, тип вычислений — **int8**, модель —
+`small` (`large-v3` на CPU слишком медленная). Эквивалентные переменные для
+ручного запуска:
 
 ```powershell
 $env:WHISPR_STT_PROVIDER = "whisper_local"
@@ -151,12 +193,15 @@ $env:WHISPR_WHISPER_COMPUTE = "int8"
 ```sh
 cd server/gateway
 python3 -m venv .venv
-./.venv/bin/pip install -r requirements.txt
-./.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8765
+./.venv/bin/pip install -r requirements.txt          # mock/dev-провайдеры
+./.venv/bin/pip install -r requirements-local.txt    # + локальный Whisper (опционально)
 
-# В другом терминале из корня репозитория
+# Из корня репозитория — gateway запустится и остановится автоматически
 cargo run -p whispr-desktop
 ```
+
+Для `.deb`/`.AppImage` без Python на целевой машине сначала соберите sidecar
+(`./scripts/build-gateway.sh`), затем `cargo tauri build`.
 
 Глобальная горячая клавиша и вставка текста на Linux сейчас требуют
 X11/XWayland.
@@ -173,8 +218,10 @@ cd server\gateway
 
 | Симптом | Решение |
 |---|---|
-| HUD не подключается | Запустите gateway и проверьте порт 8765 и WebSocket URL в Settings. |
-| Всегда вставляется одинаковая фраза | Используется `mock`; задайте `WHISPR_STT_PROVIDER=whisper_local`. |
+| Gateway не стартует автоматически | Посмотрите строки `gateway:` в журнале событий Settings и файл `gateway.log` рядом с `config.json` (`%APPDATA%\whispr\`). Убедитесь, что есть `server\gateway\.venv` либо папка sidecar `whispr-gateway` рядом с приложением. |
+| HUD не подключается | Трей → **Restart Gateway**; проверьте порт 8765 и WebSocket URL в Settings, затем `gateway.log`. |
+| Всегда вставляется одинаковая фраза | Работает `mock`; выберите провайдер **Local Whisper** в Settings (или `WHISPR_STT_PROVIDER=whisper_local` при ручном запуске) и установите `requirements-local.txt`. |
+| Первый запуск длится минуты | Скачивается модель `large-v3` (≈3 ГБ); смотрите `gateway.log`. Скачайте её заранее (шаг 3) или выберите модель меньше в Settings. |
 | Не найдена `cublas64_12.dll` или `cudnn64_9.dll` | Повторите `pip install -r requirements-local.txt` и перезапустите gateway. |
 | CUDA по-прежнему не работает | Проверьте `nvidia-smi`, обновите драйвер либо используйте CPU-режим. |
 | Не найден `link.exe` | Установите Visual Studio Build Tools с Desktop development with C++. |
@@ -189,6 +236,7 @@ cd server\gateway
 | `platform/insert/` | Вставка текста в другие приложения |
 | `apps/desktop/` | Tauri desktop-приложение и интерфейс |
 | `server/gateway/` | FastAPI gateway, STT-провайдеры и обработка текста |
+| `scripts/` | `build-gateway.sh` / `.ps1` — сборка автономного sidecar gateway |
 | `shared/protocol.md` | Протокол между клиентом и gateway |
 | `docs/` | Архитектура, структура и инструкции разработчика |
 

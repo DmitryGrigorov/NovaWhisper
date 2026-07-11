@@ -21,6 +21,8 @@
   .row { display: flex; gap: 12px; }
   .row > div { flex: 1; }
   .hint { color: #77778f; font-size: 12px; margin-top: 3px; }
+  .check { display: flex; align-items: center; gap: 8px; margin: 14px 0 4px; font-weight: 600; font-size: 13px; }
+  .check input { width: auto; margin: 0; }
   .buttons { display: flex; gap: 10px; margin-top: 22px; }
   button {
     padding: 9px 16px; border-radius: 8px; border: none; font: inherit; font-weight: 600;
@@ -91,6 +93,52 @@
     </div>
   </div>
 
+  <label class="check"><input type="checkbox" id="manage_gateway" /> Start &amp; stop the local gateway with the app</label>
+  <div class="hint">When enabled, the app launches the speech gateway on startup and stops it on quit. A gateway that is already running is used as-is and never stopped.</div>
+
+  <div class="row">
+    <div>
+      <label for="stt_provider">Speech-to-text provider</label>
+      <select id="stt_provider">
+        <option value="auto">Auto (best available)</option>
+        <option value="whisper_local">Local Whisper (GPU/CPU)</option>
+        <option value="deepgram">Deepgram (cloud)</option>
+        <option value="mock">Mock (testing)</option>
+      </select>
+    </div>
+    <div>
+      <label for="whisper_model">Whisper model</label>
+      <input id="whisper_model" list="whisper_models" placeholder="large-v3" />
+      <datalist id="whisper_models">
+        <option value="large-v3"></option>
+        <option value="large-v3-turbo"></option>
+        <option value="medium"></option>
+        <option value="small"></option>
+      </datalist>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label for="whisper_device">Whisper device</label>
+      <select id="whisper_device">
+        <option value="auto">Auto</option>
+        <option value="cuda">CUDA (NVIDIA GPU)</option>
+        <option value="cpu">CPU</option>
+      </select>
+    </div>
+    <div>
+      <label for="whisper_compute">Whisper compute type</label>
+      <select id="whisper_compute">
+        <option value="default">Default</option>
+        <option value="float16">float16 (GPU)</option>
+        <option value="int8_float16">int8_float16 (GPU, low VRAM)</option>
+        <option value="int8">int8 (CPU)</option>
+      </select>
+    </div>
+  </div>
+  <div class="hint">Saving these restarts the managed gateway. The first start of a new model downloads it (large-v3 ≈ 3 GB).</div>
+
   <label for="dictionary">Personal dictionary <span class="hint">— one term per line; used for recognition boosting and exact casing</span></label>
   <textarea id="dictionary" placeholder="Whispr&#10;Grigorov&#10;PostgreSQL"></textarea>
 
@@ -126,6 +174,11 @@
     $("language").value = config.language;
     $("polish_mode").value = config.polish_mode;
     $("insert_method").value = config.insert_method;
+    $("manage_gateway").checked = config.manage_gateway !== false;
+    $("stt_provider").value = config.stt_provider || "auto";
+    $("whisper_model").value = config.whisper_model || "large-v3";
+    $("whisper_device").value = config.whisper_device || "auto";
+    $("whisper_compute").value = config.whisper_compute || "default";
     const microphones = await invoke("list_microphones");
     const selectedMicrophone = config.microphone || "";
     for (const name of microphones) {
@@ -154,6 +207,11 @@
       config.language = $("language").value;
       config.polish_mode = $("polish_mode").value;
       config.insert_method = $("insert_method").value;
+      config.manage_gateway = $("manage_gateway").checked;
+      config.stt_provider = $("stt_provider").value;
+      config.whisper_model = $("whisper_model").value.trim() || "large-v3";
+      config.whisper_device = $("whisper_device").value;
+      config.whisper_compute = $("whisper_compute").value;
       config.microphone = $("microphone").value || null;
       config.dictionary = $("dictionary").value.split("\n").map(s => s.trim()).filter(Boolean);
       config.snippets = $("snippets").value.split("\n").map(s => s.trim()).filter(Boolean)
@@ -200,6 +258,7 @@
       case "partial": log(`partial: ${payload.text}`); break;
       case "final": log(`final (${payload.duration_ms} ms): ${payload.text}`, "ok"); break;
       case "inserted": log(`inserted via ${payload.via}`, "ok"); break;
+      case "gateway": log(`gateway: ${payload.message}`, payload.state === "error" ? "err" : payload.state === "ready" ? "ok" : ""); break;
       case "error": log(`error: ${payload.message}`, "err"); break;
     }
   });
