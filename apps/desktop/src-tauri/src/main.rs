@@ -48,6 +48,11 @@ fn toggle_dictation(app: AppHandle) -> Result<bool, String> {
     dictation::toggle(&app)
 }
 
+#[tauri::command]
+fn start_gateway(app: AppHandle) {
+    gateway::restart(&app);
+}
+
 /// Settings-page helper: waits so the user can focus a target field, then
 /// inserts sample text through the real insertion path.
 #[tauri::command]
@@ -97,6 +102,7 @@ fn main() {
             list_microphones,
             save_config,
             toggle_dictation,
+            start_gateway,
             test_insert
         ])
         .setup(|app| {
@@ -112,11 +118,14 @@ fn main() {
             .visible(true)
             .build()?;
 
-            // Closing settings hides it; the app lives in the tray.
+            // Closing Settings also stops the gateway process started by this
+            // app. The tray app remains available and can start it again.
             let settings_handle = settings.clone();
+            let gateway_app = handle.clone();
             settings.on_window_event(move |event| {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
+                    gateway::shutdown(&gateway_app);
                     let _ = settings_handle.hide();
                 }
             });

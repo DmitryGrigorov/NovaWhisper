@@ -50,7 +50,8 @@
     </div>
     <div>
       <label for="hotkey">Global hotkey</label>
-      <input id="hotkey" placeholder="ctrl+shift+space" />
+      <input id="hotkey" placeholder="Click, then press a shortcut" readonly />
+      <div class="hint">Click the field, then press a key combination (for example Ctrl+Shift+Space).</div>
     </div>
   </div>
 
@@ -110,6 +111,7 @@
       <label for="whisper_model">Whisper model</label>
       <input id="whisper_model" list="whisper_models" placeholder="large-v3" />
       <datalist id="whisper_models">
+        <option value="large"></option>
         <option value="large-v3"></option>
         <option value="large-v3-turbo"></option>
         <option value="medium"></option>
@@ -147,6 +149,7 @@
 
   <div class="buttons">
     <button id="save">Save settings</button>
+    <button id="startGateway" class="secondary">Start gateway</button>
     <button id="toggle" class="secondary">Start/Stop dictation</button>
     <button id="testInsert" class="secondary">Test insertion (3s delay)</button>
   </div>
@@ -166,6 +169,54 @@
   };
 
   let config = null;
+  let recordingHotkey = false;
+
+  const keyNames = {
+    " ": "space",
+    "Escape": "escape",
+    "Enter": "enter",
+    "Tab": "tab",
+    "Backspace": "backspace",
+    "Delete": "delete",
+    "ArrowUp": "up",
+    "ArrowDown": "down",
+    "ArrowLeft": "left",
+    "ArrowRight": "right",
+  };
+
+  function shortcutFromEvent(event) {
+    const key = keyNames[event.key] || event.key.toLowerCase();
+    if (["control", "shift", "alt", "meta"].includes(key)) return null;
+    const modifiers = [];
+    if (event.ctrlKey) modifiers.push("ctrl");
+    if (event.altKey) modifiers.push("alt");
+    if (event.shiftKey) modifiers.push("shift");
+    if (event.metaKey) modifiers.push("super");
+    return [...modifiers, key].join("+");
+  }
+
+  $("hotkey").addEventListener("focus", () => {
+    recordingHotkey = true;
+    status("Press the shortcut you want to use. Press Escape to cancel.");
+  });
+
+  $("hotkey").addEventListener("keydown", (event) => {
+    if (!recordingHotkey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === "Escape") {
+      recordingHotkey = false;
+      $("hotkey").blur();
+      status("Shortcut capture cancelled.");
+      return;
+    }
+    const shortcut = shortcutFromEvent(event);
+    if (!shortcut) return;
+    $("hotkey").value = shortcut;
+    recordingHotkey = false;
+    $("hotkey").blur();
+    status(`Shortcut captured: ${shortcut}. Save settings to apply it.`, "ok");
+  });
 
   async function load() {
     config = await invoke("get_config");
@@ -236,6 +287,16 @@
       status(recording ? "Recording…" : "Stopped.");
     } catch (e) {
       status(`${e}`, "err");
+    }
+  });
+
+  $("startGateway").addEventListener("click", async () => {
+    try {
+      status("Starting gateway…");
+      await invoke("start_gateway");
+      status("Gateway start requested. Check the event log for readiness.", "ok");
+    } catch (e) {
+      status(`Gateway start failed: ${e}`, "err");
     }
   });
 

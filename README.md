@@ -1,5 +1,7 @@
 # NovaWhisper
 
+> **Windows 11 only.** Run the desktop app from the repository with `cargo run -p whispr-desktop`. Running a copied standalone `.exe` is not supported unless it is packaged with the `whispr-gateway` sidecar.
+
 **English** | [Русский](README.ru.md)
 
 Cross-platform voice-to-text dictation. Press a global hotkey in any app,
@@ -75,6 +77,34 @@ py -m venv .venv
 cuDNN 9 DLLs inside the virtual environment. A separate full CUDA Toolkit is
 normally unnecessary; a working NVIDIA driver is still required. The gateway
 adds these package-local DLL directories automatically on Windows.
+
+### Windows Whisper models
+
+In **Settings → Whisper model**, Windows/CUDA users can choose:
+
+| Model | Use case |
+|---|---|
+| `large` / `large-v3` | Highest-quality multilingual recognition. `large` is the faster-whisper alias for `large-v3`. |
+| `large-v3-turbo` | Faster, lower-latency multilingual recognition with a small quality trade-off. |
+| `medium` / `small` | Lower VRAM use; useful on less capable GPUs. |
+
+For an NVIDIA GPU, use **CUDA** with **float16**. Selecting a model in Settings downloads it automatically the first time it starts. To download a model before launching the app, run one of these commands from `NovaWhisper\server\gateway`:
+
+```powershell
+$env:HF_HUB_DISABLE_XET = "1"
+
+# Highest quality: `large` is an alias for `large-v3`.
+.\.venv\Scripts\python.exe -c "from faster_whisper import download_model; print(download_model('large-v3'))"
+
+# Faster large-v3 variant, recommended when low latency matters.
+.\.venv\Scripts\python.exe -c "from faster_whisper import download_model; print(download_model('large-v3-turbo'))"
+
+# Smaller models for lower VRAM use.
+.\.venv\Scripts\python.exe -c "from faster_whisper import download_model; print(download_model('medium'))"
+.\.venv\Scripts\python.exe -c "from faster_whisper import download_model; print(download_model('small'))"
+```
+
+Download only the model you intend to use. After it is cached, select the matching name in **Settings → Whisper model** and click **Save settings** (or **Start gateway**).
 
 ### 3. Download the multilingual model (optional)
 

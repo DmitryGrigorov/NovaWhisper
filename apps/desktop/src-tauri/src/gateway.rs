@@ -231,25 +231,54 @@ fn spawn_gateway(launch: &Launch, host: &str, port: u16, cfg: &AppConfig) -> std
     let mut cmd = match launch {
         Launch::Binary(path) => {
             #[cfg(unix)]
-            make_executable(path);
-            let mut cmd = Command::new(path);
-            cmd.args(["--host", host, "--port", &port_s]);
-            cmd
+            {
+                make_executable(path);
+                let mut cmd = Command::new(path);
+                cmd.args(["--host", host, "--port", &port_s]);
+                cmd
+            }
+            #[cfg(windows)]
+            {
+                let mut cmd = powershell_command(&format!(
+                    "& {} --host {} --port {}",
+                    powershell_literal(path),
+                    powershell_literal(host),
+                    powershell_literal(&port_s),
+                ));
+                if let Some(parent) = path.parent() {
+                    cmd.current_dir(parent);
+                }
+                cmd
+            }
         }
         Launch::Uvicorn { python, gateway_dir } => {
-            let mut cmd = Command::new(python);
-            cmd.current_dir(gateway_dir).args([
-                "-m",
-                "uvicorn",
-                "app.main:app",
-                "--host",
-                host,
-                "--port",
-                &port_s,
-                "--log-level",
-                "info",
-            ]);
-            cmd
+            #[cfg(unix)]
+            {
+                let mut cmd = Command::new(python);
+                cmd.current_dir(gateway_dir).args([
+                    "-m",
+                    "uvicorn",
+                    "app.main:app",
+                    "--host",
+                    host,
+                    "--port",
+                    &port_s,
+                    "--log-level",
+                    "info",
+                ]);
+                cmd
+            }
+            #[cfg(windows)]
+            {
+                let mut cmd = powershell_command(&format!(
+                    "& {} -m uvicorn app.main:app --host {} --port {} --log-level info",
+                    powershell_literal(python),
+                    powershell_literal(host),
+                    powershell_literal(&port_s),
+                ));
+                cmd.current_dir(gateway_dir);
+                cmd
+            }
         }
     };
 
@@ -289,6 +318,27 @@ fn spawn_gateway(launch: &Launch, host: &str, port: u16, cfg: &AppConfig) -> std
         cmd.process_group(0);
     }
     cmd.spawn()
+}
+
+#[cfg(windows)]
+fn powershell_command(script: &str) -> Command {
+    let mut cmd = Command::new("powershell.exe");
+    cmd.args([
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        script,
+    ]);
+    cmd
+}
+
+#[cfg(windows)]
+fn powershell_literal(value: impl AsRef<std::ffi::OsStr>) -> String {
+    let value = value.as_ref().to_string_lossy();
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 fn log_path() -> Option<PathBuf> {
