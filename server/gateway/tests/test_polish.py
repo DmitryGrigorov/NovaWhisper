@@ -30,3 +30,7 @@ def test_filler_only_utterance_is_empty():
 
 def test_spacing_before_punctuation():
     assert apply_rules("hello , world .") == "Hello, world."
+
+
+def test_polishes_russian_text_without_changing_language():
+    assert apply_rules("привет мир. как дела") == "Привет мир. Как дела."

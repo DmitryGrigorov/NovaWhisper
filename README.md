@@ -139,6 +139,10 @@ $env:WHISPR_WHISPER_MODEL = "large-v3-turbo"  # ~1.6 GB download on first run
 uvicorn app.main:app --host 127.0.0.1 --port 8765
 ```
 
+`large-v3-turbo` is multilingual and supports Russian. Select
+**Russian (Русский)** in Settings to send the explicit `ru` language hint;
+use **Auto-detect** when an utterance may mix Russian with another language.
+
 CUDA needs the **CUDA 12.x + cuDNN 9** runtimes from NVIDIA. Not installed?
 Use `WHISPR_WHISPER_DEVICE=cpu` + `WHISPR_WHISPER_COMPUTE=int8` — slower but
 works everywhere, and audio still never leaves your machine. The model is

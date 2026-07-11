@@ -1,2 +1,7 @@
 # Local GPU/CPU transcription (no cloud). See README for CUDA setup on Windows.
 faster-whisper>=1.1
+
+# CTranslate2 loads these DLLs at first inference on Windows. The provider
+# adds their package-local bin directories via os.add_dll_directory().
+nvidia-cublas-cu12>=12.4; sys_platform == "win32"
+nvidia-cudnn-cu12>=9; sys_platform == "win32"

@@ -26,6 +26,34 @@ MIN_PARTIAL_AUDIO_S = 0.6
 
 _MODELS: dict[tuple, object] = {}
 _MODEL_LOCK = threading.Lock()
+_DLL_HANDLES: list[object] = []
+
+
+def _configure_windows_cuda_dlls() -> None:
+    """Expose CUDA DLLs installed by the optional NVIDIA PyPI packages.
+
+    Windows does not automatically search package-local ``bin`` directories,
+    so CTranslate2 otherwise fails only when the first transcription begins.
+    Keep the returned directory handles alive for the lifetime of the process.
+    """
+    if os.name != "nt" or not hasattr(os, "add_dll_directory"):
+        return
+
+    import nvidia
+
+    nvidia_root = next(iter(nvidia.__path__))
+    dll_dirs = []
+    for component in ("cublas", "cudnn", "cuda_nvrtc"):
+        dll_dir = os.path.join(nvidia_root, component, "bin")
+        if os.path.isdir(dll_dir):
+            dll_dirs.append(dll_dir)
+            _DLL_HANDLES.append(os.add_dll_directory(dll_dir))
+
+    # CTranslate2 resolves its CUDA dependencies with LoadLibrary, whose
+    # legacy search path still consults PATH on Windows.
+    if dll_dirs:
+        current_path = os.environ.get("PATH", "")
+        os.environ["PATH"] = os.pathsep.join([*dll_dirs, current_path])
 
 
 def _model_config() -> tuple[str, str, str]:
@@ -39,6 +67,7 @@ def _model_config() -> tuple[str, str, str]:
 def load_model():
     """Load (and cache) the WhisperModel. Blocking — call off the event loop.
     The first call downloads the model weights."""
+    _configure_windows_cuda_dlls()
     from faster_whisper import WhisperModel
 
     key = _model_config()
