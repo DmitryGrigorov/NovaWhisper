@@ -1,5 +1,6 @@
-# Local GPU/CPU transcription (no cloud). See README for CUDA setup on Windows.
-faster-whisper>=1.1
+# Local CUDA transcription for Windows. Linux markers skip the NVIDIA wheels
+# and retain the faster-whisper CPU backend for backwards compatibility.
+-r requirements-faster.txt
 
 # CTranslate2 loads these DLLs at first inference on Windows. The provider
 # adds their package-local bin directories via os.add_dll_directory().

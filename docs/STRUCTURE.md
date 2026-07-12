@@ -12,7 +12,7 @@ Desktop app (Rust/Tauri)                Gateway (Python/FastAPI)
 app start/exit ──► gateway.rs ──spawn/kill──► uvicorn app.main:app
                      (skipped if a gateway already answers /healthz)
 hotkey ──► dictation.rs                 /v1/stream (WebSocket)
-             │ AudioCapture (cpal)        │ SttSession (mock | whisper_local | deepgram)
+             │ AudioCapture (cpal)        │ SttSession (mock | whisper_mlx | whisper_local | deepgram)
              │ 16kHz PCM chunks           │   partial_queue ──► "partial" frames
              ▼                            ▼
            stream_utterance ──WS──►     receive audio ──► STT ──► polish()
@@ -65,12 +65,13 @@ hotkey ──► dictation.rs                 /v1/stream (WebSocket)
 | `app/providers/base.py` | `SttSession` ABC: `start()/feed()/finish()` + `partial_queue` (`None` = end sentinel) | Provider interface changes |
 | `app/providers/mock.py` | Offline provider: reveals canned transcript ~2.5 words/sec of audio (`WHISPR_MOCK_TRANSCRIPT`) | Test/dev behavior |
 | `app/providers/whisper_local.py` | faster-whisper on local GPU/CPU (default model `large-v3`); 1 s incremental partial decodes (beam 1), final beam 5; module-level model cache | Local STT tuning |
+| `app/providers/whisper_mlx.py` | MLX Whisper on Apple Silicon GPU/Metal; shared process model cache, serialized unified-memory inference, live partials | macOS GPU STT tuning |
 | `app/providers/deepgram.py` | Deepgram streaming WS client (untested against live API — no key in dev) | Cloud STT |
 | `app/providers/__init__.py` | `resolve_provider_name()` (env override → deepgram-if-key → whisper-if-installed → mock) + `create_session()` | Registering a provider |
 | `app/polish.py` | `apply_rules()` (fillers, stutters, casing, punctuation, dictionary casing) and `llm_polish()` (Claude `claude-haiku-4-5`, prompt-cached system block, falls back to rules on any failure) | Polish behavior, prompts |
 | `run_gateway.py` | Console/frozen entry point (`--host/--port`); what the PyInstaller sidecar executes | Sidecar CLI changes |
 | `tests/` | `test_polish.py` (rules), `test_providers.py` (selection), `test_stream.py` (WS end-to-end with mock) | Any gateway change — keep green |
-| `requirements.txt` / `requirements-local.txt` | Base deps / optional faster-whisper | Dependency changes |
+| `requirements.txt` / `requirements-faster.txt` / `requirements-mlx.txt` / `requirements-local.txt` | Base deps / CPU faster-whisper / Apple MLX / Windows CUDA | Dependency changes |
 
 ### Other
 

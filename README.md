@@ -253,10 +253,10 @@ Global hotkeys and insertion currently need X11/XWayland on Linux.
 
 ## macOS Apple Silicon (M2) — local `small` model
 
-The following setup is tested for running from source on an Apple Silicon M2
-Mac. The current `faster-whisper` backend uses the CPU on macOS; use the
-multilingual `small` model with `int8` compute for a practical balance of speed
-and accuracy.
+The following setup targets an Apple Silicon M2 Mac. The MLX backend runs
+Whisper on the Apple GPU through Metal; `faster-whisper` remains available as a
+CPU fallback. The multilingual `small` model is the recommended default for a
+fanless MacBook Air.
 
 Install the required tools:
 
@@ -265,9 +265,8 @@ xcode-select --install
 brew install rust python@3.13
 ```
 
-Create the gateway environment with Python 3.13. Do not use Python 3.14 because
-CTranslate2/faster-whisper wheels may not yet be available or compatible. If an
-older `.venv` already exists, preserve it before creating the new environment:
+Create the gateway environment with Python 3.13. If an older `.venv` already
+exists, preserve it before creating the new environment:
 
 ```sh
 cd /path/to/NovaWhisper/server/gateway
@@ -275,13 +274,13 @@ mv .venv .venv-backup  # only when an old .venv already exists
 /opt/homebrew/bin/python3.13 -m venv .venv
 ./.venv/bin/pip install --upgrade pip
 ./.venv/bin/pip install -r requirements.txt
-./.venv/bin/pip install -r requirements-local.txt
+./.venv/bin/pip install -r requirements-mlx.txt
 ```
 
 Download the model in advance (otherwise it downloads on first gateway start):
 
 ```sh
-./.venv/bin/python -c "from faster_whisper import download_model; print(download_model('small'))"
+./.venv/bin/python -c "from huggingface_hub import snapshot_download; print(snapshot_download('mlx-community/whisper-small-mlx'))"
 ```
 
 Run the desktop app from the repository root:
@@ -293,15 +292,18 @@ cargo run -p whispr-desktop
 
 In Whispr Settings select:
 
-- **Speech-to-text provider:** Local Whisper
+- **Speech-to-text provider:** MLX Whisper (Apple Silicon GPU), or Auto
 - **Whisper model:** `small`
-- **Whisper device:** CPU
-- **Whisper compute type:** `int8`
+- **Whisper device / compute type:** ignored by MLX (used by CPU/CUDA fallback)
 - **Start & stop the local gateway with the app:** enabled
 
 Click **Save settings**. The app starts the gateway from
 `server/gateway/.venv`; use **Tray → Restart Gateway** after changing model
 settings.
+
+MLX runs Whisper inference on the Apple GPU through Metal while CPU cores keep
+handling audio capture, networking, and text processing. To force the CPU
+fallback, install `requirements-faster.txt` and select **Local Whisper**.
 
 ### macOS privacy permissions
 
@@ -369,6 +371,23 @@ cargo install tauri-cli --version '^2' --locked
 ./scripts/build-gateway.sh        # embed the self-contained gateway in the DMG
 cargo test --workspace
 cargo tauri build --bundles dmg
+```
+
+The sidecar backend is selected by platform and can also be forced:
+
+```sh
+WHISPR_GATEWAY_BACKEND=mlx ./scripts/build-gateway.sh  # Apple Silicon GPU
+WHISPR_GATEWAY_BACKEND=cpu ./scripts/build-gateway.sh  # macOS/Linux CPU
+```
+
+Windows keeps a separate CUDA build path:
+
+```powershell
+$env:WHISPR_GATEWAY_BACKEND = "cuda"  # default; NVIDIA CUDA package
+scripts\build-gateway.ps1
+
+$env:WHISPR_GATEWAY_BACKEND = "cpu"   # optional Windows CPU package
+scripts\build-gateway.ps1
 ```
 
 The Apple Silicon installer is created at:

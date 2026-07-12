@@ -1,19 +1,28 @@
 import importlib.util
 import os
+import platform
 
 from .base import SttSession
 
 
+def _module_available(name: str) -> bool:
+    return importlib.util.find_spec(name) is not None
+
+
+def _is_apple_silicon() -> bool:
+    return platform.system() == "Darwin" and platform.machine() == "arm64"
+
+
 def resolve_provider_name() -> str:
-    """WHISPR_STT_PROVIDER=mock|deepgram|whisper_local wins; otherwise pick the
-    best available: Deepgram if a key is set, local GPU/CPU Whisper if
-    faster-whisper is installed, else the offline mock."""
+    """Select the best installed backend without crossing platform stacks."""
     explicit = os.environ.get("WHISPR_STT_PROVIDER", "").lower()
     if explicit:
         return explicit
     if os.environ.get("DEEPGRAM_API_KEY"):
         return "deepgram"
-    if importlib.util.find_spec("faster_whisper") is not None:
+    if _is_apple_silicon() and _module_available("mlx_whisper"):
+        return "whisper_mlx"
+    if _module_available("faster_whisper"):
         return "whisper_local"
     return "mock"
 
@@ -28,6 +37,10 @@ def create_session(language: str, dictionary: list[str]) -> SttSession:
         from .whisper_local import WhisperLocalSession
 
         return WhisperLocalSession(language=language)
+    if provider == "whisper_mlx":
+        from .whisper_mlx import WhisperMlxSession
+
+        return WhisperMlxSession(language=language, dictionary=dictionary)
     from .mock import MockSession
 
     return MockSession()

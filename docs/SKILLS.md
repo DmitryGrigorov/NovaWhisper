@@ -72,7 +72,9 @@ timeout 20 xvfb-run -a dbus-run-session ./target/debug/whispr-desktop
 2. Register it in `app/providers/__init__.py`: both `resolve_provider_name()`
    (auto-selection order) and `create_session()`.
 3. Heavy/optional deps: import lazily inside methods and add them to
-   `requirements-local.txt` (pattern: `whisper_local.py`).
+   the platform-specific dependency file (`requirements-faster.txt`,
+   `requirements-mlx.txt`, or Windows CUDA `requirements-local.txt`). Follow
+   `whisper_local.py` or `whisper_mlx.py` as the provider pattern.
 4. Add a selection test in `tests/test_providers.py`; if the provider can run
    offline, add a WS test modeled on `tests/test_stream.py`.
 5. Document env vars in README's provider table.

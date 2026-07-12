@@ -264,6 +264,7 @@
       <label for="stt_provider">Speech-to-text provider</label>
       <select id="stt_provider">
         <option value="auto">Auto (best available)</option>
+        <option value="whisper_mlx">MLX Whisper (Apple Silicon GPU)</option>
         <option value="whisper_local">Local Whisper (GPU/CPU)</option>
         <option value="deepgram">Deepgram (cloud)</option>
         <option value="mock">Mock (testing)</option>
@@ -321,7 +322,7 @@
       </select>
     </div>
   </div>
-  <div class="hint">Saving these restarts the managed gateway. The first start of a new model downloads it (large-v3 ≈ 3 GB).</div>
+  <div class="hint" id="backendHint">Saving these restarts the managed gateway. The first start of a new model downloads it.</div>
 
   <details class="advanced">
     <summary>Advanced connection settings</summary>
@@ -550,6 +551,17 @@
     return [...modifiers, key].join("+");
   }
 
+  function updateBackendControls() {
+    const mlx = $("stt_provider").value === "whisper_mlx";
+    $("whisper_device").disabled = mlx;
+    $("whisper_compute").disabled = mlx;
+    $("backendHint").textContent = mlx
+      ? "MLX uses the Apple Silicon GPU through Metal; CPU cores continue handling audio and app work."
+      : "Device and compute type apply to faster-whisper CPU/CUDA. Saving restarts the managed gateway.";
+  }
+
+  $("stt_provider").addEventListener("change", updateBackendControls);
+
   $("hotkey").addEventListener("focus", () => {
     recordingHotkey = true;
     status("Press the shortcut you want to use. Press Escape to cancel.");
@@ -603,6 +615,7 @@
     $("whisper_model").value = configuredModel;
     $("whisper_device").value = config.whisper_device || "auto";
     $("whisper_compute").value = config.whisper_compute || "default";
+    updateBackendControls();
     const microphones = await invoke("list_microphones");
     const selectedMicrophone = config.microphone || "";
     for (const name of microphones) {

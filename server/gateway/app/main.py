@@ -1,7 +1,8 @@
 """Whispr gateway: WebSocket audio streaming -> STT -> polish.
 
 Run:  uvicorn app.main:app --host 127.0.0.1 --port 8765
-Env:  WHISPR_STT_PROVIDER=mock|deepgram, DEEPGRAM_API_KEY, ANTHROPIC_API_KEY,
+Env:  WHISPR_STT_PROVIDER=mock|deepgram|whisper_local|whisper_mlx,
+      DEEPGRAM_API_KEY, ANTHROPIC_API_KEY,
       WHISPR_POLISH_MODEL, WHISPR_MOCK_TRANSCRIPT
 """
 

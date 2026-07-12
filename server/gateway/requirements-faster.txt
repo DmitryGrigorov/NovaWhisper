@@ -1,0 +1,3 @@
+# Cross-platform faster-whisper backend (CPU, or CUDA when CUDA libraries are
+# supplied separately by requirements-local.txt on Windows).
+faster-whisper>=1.1

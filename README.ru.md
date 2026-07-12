@@ -225,10 +225,10 @@ X11/XWayland.
 
 ## macOS Apple Silicon (M2) — локальная модель `small`
 
-Эта конфигурация проверена при запуске из исходников на Mac с Apple Silicon M2.
-Текущий backend `faster-whisper` использует на macOS процессор. Для разумного
-баланса скорости и точности используйте многоязычную модель `small` и тип
-вычислений `int8`.
+Эта конфигурация предназначена для Mac с Apple Silicon M2. Backend MLX запускает
+Whisper на GPU Apple через Metal; `faster-whisper` остаётся доступен как CPU
+fallback. Для MacBook Air без вентилятора рекомендуется многоязычная модель
+`small`.
 
 Установите необходимые инструменты:
 
@@ -237,9 +237,8 @@ xcode-select --install
 brew install rust python@3.13
 ```
 
-Создайте окружение gateway на Python 3.13. Не используйте Python 3.14: для него
-совместимые колёса CTranslate2/faster-whisper могут быть ещё недоступны. Если
-старое окружение `.venv` уже существует, сохраните его перед созданием нового:
+Создайте окружение gateway на Python 3.13. Если старое окружение `.venv` уже
+существует, сохраните его перед созданием нового:
 
 ```sh
 cd /path/to/NovaWhisper/server/gateway
@@ -247,13 +246,13 @@ mv .venv .venv-backup  # только если старое окружение .
 /opt/homebrew/bin/python3.13 -m venv .venv
 ./.venv/bin/pip install --upgrade pip
 ./.venv/bin/pip install -r requirements.txt
-./.venv/bin/pip install -r requirements-local.txt
+./.venv/bin/pip install -r requirements-mlx.txt
 ```
 
 Заранее скачайте модель (иначе она скачается при первом запуске gateway):
 
 ```sh
-./.venv/bin/python -c "from faster_whisper import download_model; print(download_model('small'))"
+./.venv/bin/python -c "from huggingface_hub import snapshot_download; print(snapshot_download('mlx-community/whisper-small-mlx'))"
 ```
 
 Запустите desktop-приложение из корня репозитория:
@@ -265,15 +264,18 @@ cargo run -p whispr-desktop
 
 В Settings приложения Whispr выберите:
 
-- **Speech-to-text provider:** Local Whisper
+- **Speech-to-text provider:** MLX Whisper (Apple Silicon GPU) либо Auto
 - **Whisper model:** `small`
-- **Whisper device:** CPU
-- **Whisper compute type:** `int8`
+- **Whisper device / compute type:** игнорируются MLX и нужны CPU/CUDA fallback
 - **Start & stop the local gateway with the app:** включено
 
 Нажмите **Save settings**. Приложение запускает gateway из
 `server/gateway/.venv`. После изменения модели используйте
 **Tray → Restart Gateway**.
+
+MLX выполняет Whisper-инференс на GPU Apple через Metal, а ядра CPU продолжают
+обрабатывать захват аудио, сеть и текст. Чтобы принудительно использовать CPU,
+установите `requirements-faster.txt` и выберите **Local Whisper**.
 
 ### Разрешения конфиденциальности macOS
 
@@ -342,6 +344,23 @@ cargo install tauri-cli --version '^2' --locked
 ./scripts/build-gateway.sh        # встроить автономный gateway в DMG
 cargo test --workspace
 cargo tauri build --bundles dmg
+```
+
+Backend sidecar выбирается по платформе автоматически, но его можно указать:
+
+```sh
+WHISPR_GATEWAY_BACKEND=mlx ./scripts/build-gateway.sh  # GPU Apple Silicon
+WHISPR_GATEWAY_BACKEND=cpu ./scripts/build-gateway.sh  # CPU macOS/Linux
+```
+
+Для Windows остаётся отдельная CUDA-сборка:
+
+```powershell
+$env:WHISPR_GATEWAY_BACKEND = "cuda"  # по умолчанию; NVIDIA CUDA
+scripts\build-gateway.ps1
+
+$env:WHISPR_GATEWAY_BACKEND = "cpu"   # опциональная Windows CPU-сборка
+scripts\build-gateway.ps1
 ```
 
 Установщик для Apple Silicon будет создан здесь:

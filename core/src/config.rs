@@ -33,8 +33,9 @@ pub struct AppConfig {
     /// Start and stop the local gateway together with the app (loopback
     /// gateway_url only). An already-running gateway is detected and left alone.
     pub manage_gateway: bool,
-    /// STT provider for the managed gateway: "auto" | "whisper_local" |
-    /// "deepgram" | "mock". "auto" lets the gateway pick the best available.
+    /// STT provider for the managed gateway: "auto" | "whisper_mlx" |
+    /// "whisper_local" | "deepgram" | "mock". "auto" picks MLX on Apple
+    /// Silicon, faster-whisper elsewhere, or a configured cloud provider.
     pub stt_provider: String,
     /// faster-whisper model name or CTranslate2 dir for the managed gateway.
     pub whisper_model: String,
