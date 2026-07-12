@@ -16,47 +16,47 @@ NovaWhisper turns a global hotkey into fast, private voice dictation for Windows
 
 Use the images below as a visual walkthrough of the workflow.
 
-![NovaWhisper overview](assets/ScreenCapture.gif)
+![NovaWhisper inserting dictated text at the cursor](assets/ScreenCapture.gif)
 
-### 1. Dictate anywhere
+### 1. Whispr is ready
 
-![NovaWhisper voice dictation demo](assets/1.png)
+![NovaWhisper main window header with the Ready status](assets/1.png)
 
-### 2. Review and insert
+### 2. Set the global hotkey and microphone
 
-![NovaWhisper recording and transcription flow](assets/2.png)
+![NovaWhisper Everyday settings with hotkey and microphone selection](assets/4.png)
 
-### 3. Configure from the tray
+### 3. Choose the language, model, and insertion method
 
-![NovaWhisper tray menu and settings](assets/3.png)
+![NovaWhisper Language & insertion and Speech engine settings](assets/7.png)
 
-### 4. Prepare your microphone and provider
+### 4. Save and wait for the speech model
 
-![NovaWhisper settings and input selection](assets/4.png)
+![NovaWhisper event log showing the gateway ready and transcription events](assets/6.png)
 
-### 5. Choose the recognition model
+### 5. Start dictation
 
-![NovaWhisper model selection](assets/5.png)
+![NovaWhisper Start Dictation button](assets/2.png)
 
-### 6. Pick the insertion method
+### 6. Speak while Whispr listens
 
-![NovaWhisper insertion settings](assets/6.png)
+![NovaWhisper recording with the live Listening indicator](assets/3.png)
 
-### 7. Save and apply your changes
+### 7. Control the recording from the HUD
 
-![NovaWhisper settings saved](assets/7.png)
+![NovaWhisper HUD listening with Stop and Copy buttons](assets/9.png)
 
-### 8. Start dictation from the app
+### 8. Stop and let recognition run
 
-![NovaWhisper start dictation](assets/8.png)
+![NovaWhisper HUD transcribing after the recording stopped](assets/10.png)
 
-### 9. Stop and let recognition run
+### 9. Transcripts are saved to the Voice clipboard
 
-![NovaWhisper stop and process speech](assets/9.png)
+![NovaWhisper window with a saved transcript and its Copy button](assets/5.png)
 
-### 10. Use the generated transcript
+### 10. Manage everything from one window
 
-![NovaWhisper transcript ready for use](assets/10.png)
+![NovaWhisper full window with the Voice clipboard, settings, and dictation controls](assets/8.png)
 
 ## User flow: preparation → recording → recognition → result
 
