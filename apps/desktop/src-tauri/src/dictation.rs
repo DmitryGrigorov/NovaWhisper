@@ -46,7 +46,9 @@ pub struct DictationState(pub Mutex<Option<ActiveSession>>);
 #[derive(Default)]
 pub struct LatestTranscript(pub Mutex<String>);
 
-/// Copy the latest final transcript to the system clipboard.
+/// Copy the latest final transcript to the system clipboard. Like insertion,
+/// the pasteboard write runs on the application main queue: on macOS the
+/// pasteboard is AppKit state that misbehaves on worker threads.
 pub fn copy_latest(app: &AppHandle) {
     let text = app
         .state::<LatestTranscript>()
@@ -61,12 +63,21 @@ pub fn copy_latest(app: &AppHandle) {
         );
         return;
     }
-    match whispr_insert::copy_to_clipboard(&text) {
-        Ok(()) => emit(app, json!({"kind": "copied", "text": text})),
-        Err(e) => emit(
+    let main_app = app.clone();
+    let scheduled = app.run_on_main_thread(move || {
+        match whispr_insert::copy_to_clipboard(&text) {
+            Ok(()) => emit(&main_app, json!({"kind": "copied", "text": text})),
+            Err(e) => emit(
+                &main_app,
+                json!({"kind": "error", "message": format!("copy failed: {e}")}),
+            ),
+        }
+    });
+    if let Err(e) = scheduled {
+        emit(
             app,
-            json!({"kind": "error", "message": format!("copy failed: {e}")}),
-        ),
+            json!({"kind": "error", "message": format!("cannot schedule copy: {e}")}),
+        );
     }
 }
 

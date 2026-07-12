@@ -75,7 +75,9 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
         .set_text(text.to_string())
         .context("cannot write clipboard")?;
     // On X11 the selection is served by this handle; give a clipboard manager
-    // a beat to take ownership before it drops.
+    // a beat to take ownership before it drops. Elsewhere the write is
+    // synchronous and this may run on the main thread, so don't stall it.
+    #[cfg(target_os = "linux")]
     sleep(Duration::from_millis(60));
     Ok(())
 }
