@@ -4,7 +4,7 @@
 
 **Speak naturally. Keep your flow.**
 
-NovaWhisper turns a global hotkey into fast, private voice dictation for Windows: hold the shortcut, speak in any app, and insert a polished transcript exactly where your cursor is.
+NovaWhisper turns a global hotkey into fast, private voice dictation for Windows/MacOS/Linux (Ubuntu): hold the shortcut, speak in any app, and insert a polished transcript exactly where your cursor is.
 
 **English** · [Русский](README.ru.md)
 
