@@ -68,6 +68,18 @@ pub fn insert_text(text: &str, method: InsertMethod) -> Result<InsertedVia> {
     }
 }
 
+/// Put `text` on the system clipboard without pasting or restoring.
+pub fn copy_to_clipboard(text: &str) -> Result<()> {
+    let mut clipboard = arboard::Clipboard::new().context("cannot open clipboard")?;
+    clipboard
+        .set_text(text.to_string())
+        .context("cannot write clipboard")?;
+    // On X11 the selection is served by this handle; give a clipboard manager
+    // a beat to take ownership before it drops.
+    sleep(Duration::from_millis(60));
+    Ok(())
+}
+
 /// Tier 2: clipboard set + synthetic paste chord + clipboard restore.
 fn paste_insert(text: &str) -> Result<()> {
     let mut clipboard = arboard::Clipboard::new().context("cannot open clipboard")?;

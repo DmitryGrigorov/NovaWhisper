@@ -41,6 +41,91 @@ pub async fn insert_text(
 #[derive(Default)]
 pub struct DictationState(pub Mutex<Option<ActiveSession>>);
 
+/// Most recent non-empty final transcript of this app run, for the
+/// tray "Copy Latest Transcript" action and its global hotkey.
+#[derive(Default)]
+pub struct LatestTranscript(pub Mutex<String>);
+
+/// Copy the latest final transcript to the system clipboard.
+pub fn copy_latest(app: &AppHandle) {
+    let text = app
+        .state::<LatestTranscript>()
+        .0
+        .lock()
+        .map(|t| t.clone())
+        .unwrap_or_default();
+    if text.is_empty() {
+        emit(
+            app,
+            json!({"kind": "error", "message": "No transcript to copy yet."}),
+        );
+        return;
+    }
+    match whispr_insert::copy_to_clipboard(&text) {
+        Ok(()) => emit(app, json!({"kind": "copied", "text": text})),
+        Err(e) => emit(
+            app,
+            json!({"kind": "error", "message": format!("copy failed: {e}")}),
+        ),
+    }
+}
+
+/// Dictation lifecycle as reflected in the tray icon, so the user can tell
+/// when a recording started and when the transcript has landed.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum TrayStatus {
+    Idle,
+    Recording,
+    Transcribing,
+}
+
+/// Swap the tray icon and tooltip to match the dictation state: red dot while
+/// recording, amber dot while a transcript is pending, app icon when idle.
+pub fn set_tray_status(app: &AppHandle, status: TrayStatus) {
+    let Some(tray) = app.tray_by_id("whispr-tray") else {
+        return;
+    };
+    let (icon, tooltip) = match status {
+        TrayStatus::Idle => (
+            app.default_window_icon().cloned(),
+            "Whispr — voice to text anywhere",
+        ),
+        TrayStatus::Recording => (
+            Some(dot_icon([0xE5, 0x3E, 0x3E])),
+            "Whispr — recording… (press the hotkey to stop)",
+        ),
+        TrayStatus::Transcribing => (
+            Some(dot_icon([0xF0, 0xA8, 0x2E])),
+            "Whispr — transcribing…",
+        ),
+    };
+    if let Some(icon) = icon {
+        let _ = tray.set_icon(Some(icon));
+    }
+    let _ = tray.set_tooltip(Some(tooltip));
+}
+
+/// 32×32 filled-circle "state light" rendered at runtime, so no icon assets
+/// are needed per state.
+fn dot_icon(rgb: [u8; 3]) -> tauri::image::Image<'static> {
+    const SIZE: usize = 32;
+    let mut rgba = vec![0u8; SIZE * SIZE * 4];
+    let center = (SIZE as f32 - 1.0) / 2.0;
+    let radius = SIZE as f32 * 0.42;
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let dx = x as f32 - center;
+            let dy = y as f32 - center;
+            if dx * dx + dy * dy <= radius * radius {
+                let i = (y * SIZE + x) * 4;
+                rgba[i..i + 3].copy_from_slice(&rgb);
+                rgba[i + 3] = 0xFF;
+            }
+        }
+    }
+    tauri::image::Image::new_owned(rgba, SIZE as u32, SIZE as u32)
+}
+
 pub struct ActiveSession {
     stop_tx: Option<oneshot::Sender<()>>,
     capture: CaptureHandle,
@@ -60,12 +145,15 @@ pub fn toggle(app: &AppHandle) -> Result<bool, String> {
         }
         session.capture.stop();
         emit(app, json!({"kind": "status", "recording": false}));
+        // The final transcript is still on its way; show that in the tray.
+        set_tray_status(app, TrayStatus::Transcribing);
         Ok(false)
     } else {
         match start(app) {
             Ok(session) => {
                 *guard = Some(session);
                 emit(app, json!({"kind": "status", "recording": true}));
+                set_tray_status(app, TrayStatus::Recording);
                 Ok(true)
             }
             Err(e) => {
@@ -110,6 +198,7 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                 &stream_app,
                 json!({"kind": "error", "message": e.to_string()}),
             );
+            set_tray_status(&stream_app, TrayStatus::Idle);
         }
     });
 
@@ -132,6 +221,11 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                     duration_ms,
                 } => {
                     let final_text = snippets.expand(&text);
+                    if !final_text.is_empty() {
+                        if let Ok(mut latest) = event_app.state::<LatestTranscript>().0.lock() {
+                            *latest = final_text.clone();
+                        }
+                    }
                     emit(
                         &event_app,
                         json!({
@@ -163,8 +257,11 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                 }
                 StreamEvent::Error(message) => {
                     emit(&event_app, json!({"kind": "error", "message": message}));
+                    set_tray_status(&event_app, TrayStatus::Idle);
                 }
-                StreamEvent::Closed => {}
+                StreamEvent::Closed => {
+                    set_tray_status(&event_app, TrayStatus::Idle);
+                }
             }
         }
     });
@@ -205,6 +302,7 @@ fn finish_session(app: &AppHandle) {
         }
     }
     emit(app, json!({"kind": "status", "recording": false}));
+    set_tray_status(app, TrayStatus::Idle);
 }
 
 pub fn show_hud(app: &AppHandle) {

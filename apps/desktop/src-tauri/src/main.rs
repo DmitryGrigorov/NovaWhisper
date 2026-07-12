@@ -25,11 +25,13 @@ fn list_microphones() -> Result<Vec<String>, String> {
 fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
     let previous = AppConfig::load();
     config.save().map_err(|e| e.to_string())?;
-    if previous.hotkey != config.hotkey {
+    if previous.hotkey != config.hotkey
+        || previous.copy_latest_hotkey != config.copy_latest_hotkey
+    {
         app.global_shortcut()
             .unregister_all()
             .map_err(|e| e.to_string())?;
-        register_hotkey(&app, &config.hotkey)?;
+        register_hotkeys(&app, &config)?;
     }
     if previous.show_hud && !config.show_hud {
         dictation::hide_hud(&app);
@@ -95,6 +97,21 @@ fn register_hotkey(app: &AppHandle, hotkey: &str) -> Result<(), String> {
         .map_err(|e| format!("failed to register hotkey {hotkey:?}: {e}"))
 }
 
+fn register_hotkeys(app: &AppHandle, config: &AppConfig) -> Result<(), String> {
+    register_hotkey(app, &config.hotkey)?;
+    if !config.copy_latest_hotkey.is_empty() && config.copy_latest_hotkey != config.hotkey {
+        register_hotkey(app, &config.copy_latest_hotkey)?;
+    }
+    Ok(())
+}
+
+/// True when the fired shortcut is the copy-latest one (dictation toggle wins
+/// if both are configured to the same chord).
+fn is_copy_latest_shortcut(shortcut: &Shortcut, config: &AppConfig) -> bool {
+    config.hotkey.parse::<Shortcut>().ok().as_ref() != Some(shortcut)
+        && config.copy_latest_hotkey.parse::<Shortcut>().ok().as_ref() == Some(shortcut)
+}
+
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -105,19 +122,25 @@ fn main() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
+                .with_handler(|app, shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
-                        // Capture start can block briefly; keep it off the
-                        // input-event thread.
+                        let copy = is_copy_latest_shortcut(shortcut, &AppConfig::load());
+                        // Capture start and clipboard access can block briefly;
+                        // keep them off the input-event thread.
                         let app = app.clone();
                         std::thread::spawn(move || {
-                            let _ = dictation::toggle(&app);
+                            if copy {
+                                dictation::copy_latest(&app);
+                            } else {
+                                let _ = dictation::toggle(&app);
+                            }
                         });
                     }
                 })
                 .build(),
         )
         .manage(DictationState::default())
+        .manage(dictation::LatestTranscript::default())
         .manage(gateway::GatewayState::default())
         .invoke_handler(tauri::generate_handler![
             get_config,
@@ -170,6 +193,13 @@ fn main() {
                 MenuItem::with_id(app, "toggle", "Start/Stop Dictation", true, None::<&str>)?;
             let settings_item =
                 MenuItem::with_id(app, "settings", "Settings windows…", true, None::<&str>)?;
+            let copy_latest_item = MenuItem::with_id(
+                app,
+                "copy-latest",
+                "Copy Latest Transcript",
+                true,
+                None::<&str>,
+            )?;
             let gateway_item = MenuItem::with_id(
                 app,
                 "restart-gateway",
@@ -180,7 +210,13 @@ fn main() {
             let quit_item = MenuItem::with_id(app, "quit", "Quit Whispr", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
-                &[&settings_item, &toggle_item, &gateway_item, &quit_item],
+                &[
+                    &settings_item,
+                    &toggle_item,
+                    &copy_latest_item,
+                    &gateway_item,
+                    &quit_item,
+                ],
             )?;
 
             TrayIconBuilder::with_id("whispr-tray")
@@ -193,6 +229,10 @@ fn main() {
                         std::thread::spawn(move || {
                             let _ = dictation::toggle(&app);
                         });
+                    }
+                    "copy-latest" => {
+                        let app = app.clone();
+                        std::thread::spawn(move || dictation::copy_latest(&app));
                     }
                     "settings" => {
                         if let Some(win) = app.get_webview_window("main") {
@@ -207,7 +247,7 @@ fn main() {
                 .build(app)?;
 
             let cfg = AppConfig::load();
-            if let Err(e) = register_hotkey(handle, &cfg.hotkey) {
+            if let Err(e) = register_hotkeys(handle, &cfg) {
                 tracing::warn!("{e}");
             }
 

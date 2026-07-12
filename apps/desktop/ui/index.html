@@ -194,6 +194,11 @@
       <input id="hotkey" placeholder="Click, then press a shortcut" readonly />
       <div class="hint">Click the field, then press a key combination (for example Ctrl+Shift+Space).</div>
     </div>
+    <div>
+      <label for="copy_latest_hotkey">Copy-latest hotkey</label>
+      <input id="copy_latest_hotkey" placeholder="Click, then press a shortcut" readonly />
+      <div class="hint">Copies the most recent transcript to the clipboard — same as the tray menu item. Leave empty to disable.</div>
+    </div>
   </div>
 
   <label for="microphone">Microphone</label>
@@ -563,33 +568,48 @@
 
   $("stt_provider").addEventListener("change", updateBackendControls);
 
-  $("hotkey").addEventListener("focus", () => {
-    recordingHotkey = true;
-    status("Press the shortcut you want to use. Press Escape to cancel.");
-  });
+  function bindHotkeyCapture(id) {
+    const field = $(id);
+    field.addEventListener("focus", () => {
+      recordingHotkey = true;
+      status("Press the shortcut you want to use. Press Escape to cancel.");
+    });
 
-  $("hotkey").addEventListener("keydown", (event) => {
-    if (!recordingHotkey) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.key === "Escape") {
+    field.addEventListener("keydown", (event) => {
+      if (!recordingHotkey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        recordingHotkey = false;
+        field.blur();
+        status("Shortcut capture cancelled.");
+        return;
+      }
+      const unmodified = !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+      if (unmodified && (event.key === "Backspace" || event.key === "Delete")) {
+        field.value = "";
+        recordingHotkey = false;
+        field.blur();
+        status("Shortcut cleared. Save settings to apply it.", "ok");
+        return;
+      }
+      const shortcut = shortcutFromEvent(event);
+      if (!shortcut) return;
+      field.value = shortcut;
       recordingHotkey = false;
-      $("hotkey").blur();
-      status("Shortcut capture cancelled.");
-      return;
-    }
-    const shortcut = shortcutFromEvent(event);
-    if (!shortcut) return;
-    $("hotkey").value = shortcut;
-    recordingHotkey = false;
-    $("hotkey").blur();
-    status(`Shortcut captured: ${shortcut}. Save settings to apply it.`, "ok");
-  });
+      field.blur();
+      status(`Shortcut captured: ${shortcut}. Save settings to apply it.`, "ok");
+    });
+  }
+
+  bindHotkeyCapture("hotkey");
+  bindHotkeyCapture("copy_latest_hotkey");
 
   async function load() {
     config = await invoke("get_config");
     $("gateway_url").value = config.gateway_url;
     $("hotkey").value = config.hotkey;
+    $("copy_latest_hotkey").value = config.copy_latest_hotkey || "";
     const configuredLanguage = config.language || "auto";
     if (![...$("language").options].some((option) => option.value === configuredLanguage)) {
       const customLanguage = document.createElement("option");
@@ -645,6 +665,7 @@
     try {
       config.gateway_url = $("gateway_url").value.trim();
       config.hotkey = $("hotkey").value.trim();
+      config.copy_latest_hotkey = $("copy_latest_hotkey").value.trim();
       config.language = $("language").value;
       config.polish_mode = $("polish_mode").value;
       config.insert_method = $("insert_method").value;
@@ -772,6 +793,10 @@
         addTranscript(payload.text, payload.duration_ms);
         break;
       case "inserted": log(`inserted via ${payload.via}`, "ok"); break;
+      case "copied":
+        log("latest transcript copied to clipboard", "ok");
+        status("Latest transcript copied to clipboard.", "ok");
+        break;
       case "gateway":
         log(`gateway: ${payload.message}`, payload.state === "error" ? "err" : payload.state === "ready" ? "ok" : "");
         if (payload.state === "starting") setGatewayProgress("starting", payload.message);
