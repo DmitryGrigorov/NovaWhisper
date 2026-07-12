@@ -58,6 +58,10 @@ Visual walkthrough of the workflow.
 
 ![NovaWhisper full window with the Voice clipboard, settings, and dictation controls](assets/8.png)
 
+### 11. Use tray
+
+![tray](assets/11.png)
+
 ## User flow: preparation → recording → recognition → result
 
 1. **Preparation — save your settings.** Open Whispr Settings, choose the
