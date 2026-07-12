@@ -91,11 +91,11 @@ hotkey ──► dictation.rs                 /v1/stream (WebSocket)
    s16le, 16 kHz, mono, binary WS frames; control messages are JSON text
    frames tagged by `"type"`.
 2. **Desktop event contract**: Rust emits Tauri event `whispr://event` with
-   `kind` ∈ `status{recording} | ready | partial{text} | final{text,raw_text,duration_ms} | inserted{via} | error{message} | level{value} | gateway{state,message}`.
+   `kind` ∈ `status{recording} | ready | partial{text} | final{text,raw_text,duration_ms} | inserted{via} | copied{text} | error{message} | level{value} | gateway{state,message}`.
    Consumers: `ui/hud.html`, `ui/index.html`. Change in `dictation.rs` or
    `gateway.rs` → update both pages (unknown kinds are ignored by the HUD).
 3. **Config field names**: `AppConfig` serde keys == element ids in
-   `ui/index.html` (`gateway_url`, `hotkey`, `language`, `polish_mode`,
+   `ui/index.html` (`gateway_url`, `hotkey`, `copy_latest_hotkey`, `language`, `polish_mode`,
    `insert_method`, `manage_gateway`, `stt_provider`, `whisper_model`,
    `whisper_device`, `whisper_compute`, `dictionary`, `snippets`). New fields
    need `#[serde(default)]`-compatible defaults so old config files keep loading.

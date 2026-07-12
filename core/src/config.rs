@@ -14,6 +14,9 @@ pub struct AppConfig {
     pub gateway_url: String,
     /// Global hotkey (Tauri global-shortcut syntax).
     pub hotkey: String,
+    /// Global hotkey that copies the latest transcript to the clipboard.
+    /// Empty string disables it.
+    pub copy_latest_hotkey: String,
     /// BCP-47 language code or "auto".
     pub language: String,
     /// "none" | "fillers" | "full".
@@ -52,6 +55,7 @@ impl Default for AppConfig {
         Self {
             gateway_url: "ws://127.0.0.1:8765/v1/stream".into(),
             hotkey: "ctrl+shift+space".into(),
+            copy_latest_hotkey: "ctrl+alt+c".into(),
             language: "auto".into(),
             polish_mode: "fillers".into(),
             insert_method: "auto".into(),
@@ -115,6 +119,12 @@ mod tests {
     fn old_config_uses_system_default_microphone() {
         let config: AppConfig = serde_json::from_str("{}").unwrap();
         assert_eq!(config.microphone, None);
+    }
+
+    #[test]
+    fn old_config_gets_copy_latest_hotkey_default() {
+        let config: AppConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(config.copy_latest_hotkey, "ctrl+alt+c");
     }
 
     #[test]
