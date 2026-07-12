@@ -4,7 +4,7 @@
 
 **Speak naturally. Keep your flow.**
 
-NovaWhisper turns a global hotkey into fast, private voice-to-text: hold the shortcut, speak in any app, and receive a polished transcript exactly where your cursor is.
+NovaWhisper turns a global hotkey into fast, private voice dictation for Windows: hold the shortcut, speak in any app, and insert a polished transcript exactly where your cursor is.
 
 **English** · [Русский](README.ru.md)
 
@@ -14,17 +14,49 @@ NovaWhisper turns a global hotkey into fast, private voice-to-text: hold the sho
 
 ## See it in action
 
+Use the images below as a visual walkthrough of the workflow.
+
+![NovaWhisper overview](assets/ScreenCapture.gif)
+
 ### 1. Dictate anywhere
 
-![NovaWhisper voice dictation demo](assets/ScreenCapture.gif)
+![NovaWhisper voice dictation demo](assets/1.png)
 
-### 2. Speak, review, insert
+### 2. Review and insert
 
-![NovaWhisper recording and transcription flow](assets/1.gif)
+![NovaWhisper recording and transcription flow](assets/2.png)
 
 ### 3. Configure from the tray
 
-![NovaWhisper tray menu and settings](assets/menu.gif)
+![NovaWhisper tray menu and settings](assets/3.png)
+
+### 4. Prepare your microphone and provider
+
+![NovaWhisper settings and input selection](assets/4.png)
+
+### 5. Choose the recognition model
+
+![NovaWhisper model selection](assets/5.png)
+
+### 6. Pick the insertion method
+
+![NovaWhisper insertion settings](assets/6.png)
+
+### 7. Save and apply your changes
+
+![NovaWhisper settings saved](assets/7.png)
+
+### 8. Start dictation from the app
+
+![NovaWhisper start dictation](assets/8.png)
+
+### 9. Stop and let recognition run
+
+![NovaWhisper stop and process speech](assets/9.png)
+
+### 10. Use the generated transcript
+
+![NovaWhisper transcript ready for use](assets/10.png)
 
 ## User flow: preparation → recording → recognition → result
 
