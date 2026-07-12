@@ -14,7 +14,7 @@ NovaWhisper turns a global hotkey into fast, private voice dictation for Windows
 
 ## See it in action
 
-Use the images below as a visual walkthrough of the workflow.
+Visual walkthrough of the workflow.
 
 ![NovaWhisper inserting dictated text at the cursor](assets/ScreenCapture.gif)
 
