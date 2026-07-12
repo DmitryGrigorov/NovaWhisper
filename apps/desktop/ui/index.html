@@ -343,8 +343,8 @@
   </section>
 
   <div class="buttons">
-    <button id="save">Save changes</button>
-    <button id="toggle" class="secondary">Start dictation</button>
+    <button id="save">Save Changes</button>
+    <button id="toggle" class="secondary">Start Dictation</button>
     <button id="hideHud" class="secondary">Hide HUD</button>
     <button id="testInsert" class="secondary">Test insertion (3s delay)</button>
   </div>
@@ -675,7 +675,7 @@
   $("toggle").addEventListener("click", async () => {
     try {
       const recording = await invoke("toggle_dictation");
-      $("toggle").textContent = recording ? "Stop dictation" : "Start dictation";
+      $("toggle").textContent = recording ? "Stop Dictation" : "Start Dictation";
       setAppState(recording ? "recording" : "ready", recording ? "Recording" : "Ready");
       status(recording ? "Recording…" : "Stopped.");
     } catch (e) {
@@ -759,7 +759,7 @@
     switch (payload.kind) {
       case "status":
         log(payload.recording ? "● recording started" : "○ recording stopped");
-        $("toggle").textContent = payload.recording ? "Stop dictation" : "Start dictation";
+        $("toggle").textContent = payload.recording ? "Stop Dictation" : "Start Dictation";
         setAppState(payload.recording ? "recording" : "ready", payload.recording ? "Recording" : "Ready");
         if (payload.recording) setClipboardLoading("listening");
         else if ($("clipboardLoader").classList.contains("visible")) setClipboardLoading("transcribing");

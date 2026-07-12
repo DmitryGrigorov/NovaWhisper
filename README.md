@@ -26,6 +26,24 @@ NovaWhisper turns a global hotkey into fast, private voice-to-text: hold the sho
 
 ![NovaWhisper tray menu and settings](assets/menu.gif)
 
+## User flow: preparation → recording → recognition → result
+
+1. **Preparation — save your settings.** Open Whispr Settings, choose the
+   microphone, language, recognition provider, model, and insertion method.
+   Click **Save Changes**. Wait until the gateway status is ready.
+2. **Recording — start dictation.** Place the cursor where the text should
+   appear, then click **Start Dictation**. Speak clearly and naturally. The
+   recording HUD and Voice clipboard loader show that Whispr is listening.
+3. **Recognition — stop dictation.** Click **Stop Dictation** when you finish
+   speaking. Recording stops immediately, and speech recognition starts
+   automatically. Keep the application running while it processes the audio.
+4. **Result — use the transcript.** The recognized text is inserted at the
+   cursor and added to the Voice clipboard. Review it, copy it again when
+   needed, or start another dictation.
+
+The complete sequence is: **configure and save → start and speak → stop and
+recognize automatically → receive and use the text**.
+
 NovaWhisper runs as two processes:
 
 1. The Python/FastAPI **gateway** performs speech recognition and polishing.

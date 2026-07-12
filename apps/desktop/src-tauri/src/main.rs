@@ -169,7 +169,7 @@ fn main() {
             let toggle_item =
                 MenuItem::with_id(app, "toggle", "Start/Stop Dictation", true, None::<&str>)?;
             let settings_item =
-                MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+                MenuItem::with_id(app, "settings", "Settings windows…", true, None::<&str>)?;
             let gateway_item = MenuItem::with_id(
                 app,
                 "restart-gateway",
@@ -180,7 +180,7 @@ fn main() {
             let quit_item = MenuItem::with_id(app, "quit", "Quit Whispr", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
-                &[&toggle_item, &settings_item, &gateway_item, &quit_item],
+                &[&settings_item, &toggle_item, &gateway_item, &quit_item],
             )?;
 
             TrayIconBuilder::with_id("whispr-tray")
