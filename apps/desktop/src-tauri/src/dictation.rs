@@ -60,7 +60,6 @@ pub fn toggle(app: &AppHandle) -> Result<bool, String> {
         }
         session.capture.stop();
         emit(app, json!({"kind": "status", "recording": false}));
-        hide_hud(app);
         Ok(false)
     } else {
         match start(app) {
@@ -144,7 +143,9 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                             ),
                         }
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                    // Leave the completed transcript visible long enough for
+                    // the user to copy it from the HUD.
+                    tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
                     hide_hud(&event_app);
                 }
                 StreamEvent::Error(message) => {

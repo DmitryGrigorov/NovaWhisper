@@ -118,21 +118,19 @@ fn main() {
             .visible(true)
             .build()?;
 
-            // Closing Settings also stops the gateway process started by this
-            // app. The tray app remains available and can start it again.
+            // Closing Settings only hides the window. The tray app and managed
+            // gateway keep running so model downloads and dictation continue.
             let settings_handle = settings.clone();
-            let gateway_app = handle.clone();
             settings.on_window_event(move |event| {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
-                    gateway::shutdown(&gateway_app);
                     let _ = settings_handle.hide();
                 }
             });
 
             WebviewWindowBuilder::new(app, "hud", WebviewUrl::App("hud.html".into()))
                 .title("Whispr HUD")
-                .inner_size(460.0, 104.0)
+                .inner_size(560.0, 104.0)
                 .resizable(false)
                 .decorations(false)
                 .always_on_top(true)

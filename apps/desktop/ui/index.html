@@ -81,6 +81,27 @@
   button.secondary { background: #2b2b40; }
   button:hover { filter: brightness(1.15); }
   #status { margin-top: 14px; min-height: 20px; font-size: 13px; color: #8f8fa8; }
+  #gatewayProgress {
+    display: none; align-items: center; gap: 12px; margin-top: 14px; padding: 12px 14px;
+    border: 1px solid #3b3b59; border-radius: 10px; background: #202033;
+  }
+  #gatewayProgress.visible { display: flex; }
+  #gatewayProgress.ready { border-color: #285d3b; background: #172a21; }
+  #gatewayProgress.error { border-color: #713838; background: #301d24; }
+  #gatewayProgress.ready .loader-spinner, #gatewayProgress.error .loader-spinner { display: none; }
+  .gateway-progress-copy { min-width: 0; }
+  .gateway-progress-copy strong { display: block; font-size: 13px; }
+  .gateway-progress-copy span { display: block; color: #9898b2; font-size: 11.5px; margin-top: 2px; }
+  #toast {
+    position: fixed; right: 22px; bottom: 22px; z-index: 20; max-width: 360px;
+    padding: 11px 14px; border: 1px solid #42425e; border-radius: 10px;
+    background: #292940; color: #f1f1f8; box-shadow: 0 10px 35px #0008;
+    opacity: 0; transform: translateY(10px); pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  #toast.visible { opacity: 1; transform: translateY(0); }
+  #toast.ok { border-color: #32804d; }
+  #toast.err { border-color: #a34545; }
   #log {
     margin-top: 10px; max-height: 160px; overflow-y: auto; padding: 10px;
     background: #10101a; border-radius: 8px; font-family: ui-monospace, monospace;
@@ -184,14 +205,34 @@
     </div>
     <div>
       <label for="whisper_model">Whisper model</label>
-      <input id="whisper_model" list="whisper_models" placeholder="large-v3" />
-      <datalist id="whisper_models">
-        <option value="large"></option>
-        <option value="large-v3"></option>
-        <option value="large-v3-turbo"></option>
-        <option value="medium"></option>
-        <option value="small"></option>
-      </datalist>
+      <select id="whisper_model">
+        <optgroup label="Recommended">
+          <option value="large-v3-turbo">Large v3 Turbo — fast, multilingual</option>
+          <option value="large-v3">Large v3 — best multilingual accuracy</option>
+          <option value="small">Small — lower memory, multilingual</option>
+        </optgroup>
+        <optgroup label="Multilingual">
+          <option value="tiny">Tiny — fastest, lowest accuracy</option>
+          <option value="base">Base</option>
+          <option value="medium">Medium</option>
+          <option value="large-v1">Large v1</option>
+          <option value="large-v2">Large v2</option>
+          <option value="large">Large — alias for Large v3</option>
+          <option value="turbo">Turbo — alias for Large v3 Turbo</option>
+        </optgroup>
+        <optgroup label="English only / English optimized">
+          <option value="tiny.en">Tiny English</option>
+          <option value="base.en">Base English</option>
+          <option value="small.en">Small English</option>
+          <option value="medium.en">Medium English</option>
+          <option value="distil-small.en">Distil Small English</option>
+          <option value="distil-medium.en">Distil Medium English</option>
+          <option value="distil-large-v2">Distil Large v2</option>
+          <option value="distil-large-v3">Distil Large v3</option>
+          <option value="distil-large-v3.5">Distil Large v3.5</option>
+        </optgroup>
+      </select>
+      <div class="hint">Suggested: Large v3 Turbo for speed, Large v3 for maximum accuracy, or Small for limited VRAM.</div>
     </div>
   </div>
 
@@ -228,8 +269,16 @@
     <button id="toggle" class="secondary">Start/Stop dictation</button>
     <button id="testInsert" class="secondary">Test insertion (3s delay)</button>
   </div>
+  <div id="gatewayProgress" role="status" aria-live="polite">
+    <div class="loader-spinner" aria-hidden="true"></div>
+    <div class="gateway-progress-copy">
+      <strong id="gatewayProgressTitle">Preparing speech model...</strong>
+      <span id="gatewayProgressHint">The first download can take several minutes.</span>
+    </div>
+  </div>
   <div id="status"></div>
   <div id="log"></div>
+  <div id="toast" role="alert" aria-live="assertive"></div>
 
 <script>
   const { invoke } = window.__TAURI__.core;
@@ -248,6 +297,33 @@
   const HISTORY_KEY = "whispr-transcript-history-v1";
   const HISTORY_LIMIT = 20;
   let transcriptHistory = [];
+  let toastTimer = null;
+
+  function notify(message, cls = "") {
+    const toast = $("toast");
+    toast.textContent = message;
+    toast.className = `visible ${cls}`.trim();
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.className = ""; }, 6000);
+  }
+
+  function setGatewayProgress(state, message = "") {
+    const panel = $("gatewayProgress");
+    const model = ($("whisper_model").value || config?.whisper_model || "Whisper").trim();
+    panel.className = `visible ${state === "ready" ? "ready" : state === "error" ? "error" : ""}`.trim();
+    if (state === "ready") {
+      $("gatewayProgressTitle").textContent = "Speech model ready";
+      $("gatewayProgressHint").textContent = message || "You can start dictating now.";
+      notify("Speech model is ready. You can start dictating.", "ok");
+    } else if (state === "error") {
+      $("gatewayProgressTitle").textContent = "Could not start speech model";
+      $("gatewayProgressHint").textContent = message;
+      notify("Speech model failed to start. Check the gateway message.", "err");
+    } else {
+      $("gatewayProgressTitle").textContent = `Downloading or loading ${model}...`;
+      $("gatewayProgressHint").textContent = "Please keep Whispr running. The first download can take several minutes.";
+    }
+  }
 
   function loadTranscriptHistory() {
     try {
@@ -409,7 +485,14 @@
     $("insert_method").value = config.insert_method;
     $("manage_gateway").checked = config.manage_gateway !== false;
     $("stt_provider").value = config.stt_provider || "auto";
-    $("whisper_model").value = config.whisper_model || "large-v3";
+    const configuredModel = config.whisper_model || "large-v3";
+    if (![...$("whisper_model").options].some((option) => option.value === configuredModel)) {
+      const custom = document.createElement("option");
+      custom.value = configuredModel;
+      custom.textContent = `${configuredModel} — custom model`;
+      $("whisper_model").appendChild(custom);
+    }
+    $("whisper_model").value = configuredModel;
     $("whisper_device").value = config.whisper_device || "auto";
     $("whisper_compute").value = config.whisper_compute || "default";
     const microphones = await invoke("list_microphones");
@@ -475,6 +558,7 @@
   $("startGateway").addEventListener("click", async () => {
     try {
       status("Starting gateway…");
+      setGatewayProgress("starting");
       await invoke("start_gateway");
       status("Gateway start requested. Check the event log for readiness.", "ok");
     } catch (e) {
@@ -527,7 +611,13 @@
         addTranscript(payload.text, payload.duration_ms);
         break;
       case "inserted": log(`inserted via ${payload.via}`, "ok"); break;
-      case "gateway": log(`gateway: ${payload.message}`, payload.state === "error" ? "err" : payload.state === "ready" ? "ok" : ""); break;
+      case "gateway":
+        log(`gateway: ${payload.message}`, payload.state === "error" ? "err" : payload.state === "ready" ? "ok" : "");
+        if (payload.state === "starting") setGatewayProgress("starting", payload.message);
+        else if (payload.state === "ready" || payload.state === "external") setGatewayProgress("ready", payload.message);
+        else if (payload.state === "error") setGatewayProgress("error", payload.message);
+        else if (payload.state === "stopped") $("gatewayProgress").className = "";
+        break;
       case "error":
         setClipboardLoading(null);
         log(`error: ${payload.message}`, "err");
