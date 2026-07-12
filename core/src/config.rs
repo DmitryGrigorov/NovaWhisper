@@ -26,6 +26,10 @@ pub struct AppConfig {
     pub microphone: Option<String>,
     /// End the utterance automatically after trailing silence.
     pub auto_stop: bool,
+    /// Show the recording HUD. Disabled by default for unobtrusive dictation.
+    pub show_hud: bool,
+    /// Hide the HUD a few seconds after a final transcript is received.
+    pub autohide_hud: bool,
     /// Start and stop the local gateway together with the app (loopback
     /// gateway_url only). An already-running gateway is detected and left alone.
     pub manage_gateway: bool,
@@ -53,6 +57,8 @@ impl Default for AppConfig {
             chunk_ms: 100,
             microphone: None,
             auto_stop: false,
+            show_hud: false,
+            autohide_hud: true,
             manage_gateway: true,
             stt_provider: "auto".into(),
             whisper_model: "large-v3".into(),
@@ -113,10 +119,31 @@ mod tests {
     #[test]
     fn old_config_gets_gateway_management_defaults() {
         let config: AppConfig = serde_json::from_str("{}").unwrap();
+        assert!(!config.show_hud);
+        assert!(config.autohide_hud);
         assert!(config.manage_gateway);
         assert_eq!(config.stt_provider, "auto");
         assert_eq!(config.whisper_model, "large-v3");
         assert_eq!(config.whisper_device, "auto");
         assert_eq!(config.whisper_compute, "default");
+    }
+
+    #[test]
+    fn language_insertion_and_hud_settings_round_trip() {
+        let config = AppConfig {
+            language: "ru".into(),
+            insert_method: "paste".into(),
+            show_hud: true,
+            autohide_hud: false,
+            ..AppConfig::default()
+        };
+
+        let raw = serde_json::to_string(&config).unwrap();
+        let restored: AppConfig = serde_json::from_str(&raw).unwrap();
+
+        assert_eq!(restored.language, "ru");
+        assert_eq!(restored.insert_method, "paste");
+        assert!(restored.show_hud);
+        assert!(!restored.autohide_hud);
     }
 }

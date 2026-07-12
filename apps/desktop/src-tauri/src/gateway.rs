@@ -42,15 +42,25 @@ enum Launch {
     /// Self-contained gateway executable (PyInstaller sidecar).
     Binary(PathBuf),
     /// `python -m uvicorn app.main:app` inside a gateway source checkout.
-    Uvicorn { python: PathBuf, gateway_dir: PathBuf },
+    Uvicorn {
+        python: PathBuf,
+        gateway_dir: PathBuf,
+    },
 }
 
 impl Launch {
     fn describe(&self) -> String {
         match self {
             Launch::Binary(p) => format!("bundled gateway {}", p.display()),
-            Launch::Uvicorn { python, gateway_dir } => {
-                format!("{} -m uvicorn in {}", python.display(), gateway_dir.display())
+            Launch::Uvicorn {
+                python,
+                gateway_dir,
+            } => {
+                format!(
+                    "{} -m uvicorn in {}",
+                    python.display(),
+                    gateway_dir.display()
+                )
             }
         }
     }
@@ -58,7 +68,10 @@ impl Launch {
 
 fn emit(app: &AppHandle, state: &str, message: String) {
     tracing::info!("gateway: {message}");
-    let _ = app.emit(EVENT, json!({"kind": "gateway", "state": state, "message": message}));
+    let _ = app.emit(
+        EVENT,
+        json!({"kind": "gateway", "state": state, "message": message}),
+    );
 }
 
 /// Start the managed gateway in the background if needed.
@@ -100,6 +113,11 @@ pub fn shutdown(app: &AppHandle) -> bool {
     true
 }
 
+/// Notify UI consumers after an explicit Settings-page stop.
+pub fn emit_stopped(app: &AppHandle) {
+    emit(app, "stopped", "managed gateway stopped".into());
+}
+
 /// Kill the process and any children (PyInstaller bootloaders and uvicorn can
 /// have their own subprocesses).
 fn kill_tree(child: &mut Child) {
@@ -131,7 +149,10 @@ async fn ensure_inner(app: &AppHandle) {
         emit(
             app,
             "error",
-            format!("cannot parse gateway URL {:?}; not managing the gateway", cfg.gateway_url),
+            format!(
+                "cannot parse gateway URL {:?}; not managing the gateway",
+                cfg.gateway_url
+            ),
         );
         return;
     };
@@ -174,7 +195,11 @@ async fn ensure_inner(app: &AppHandle) {
         return;
     };
 
-    emit(app, "starting", format!("starting gateway on {host}:{port} ({})", launch.describe()));
+    emit(
+        app,
+        "starting",
+        format!("starting gateway on {host}:{port} ({})", launch.describe()),
+    );
     let child = match spawn_gateway(&launch, &host, port, &cfg) {
         Ok(child) => child,
         Err(e) => {
@@ -182,7 +207,11 @@ async fn ensure_inner(app: &AppHandle) {
             return;
         }
     };
-    app.state::<GatewayState>().child.lock().unwrap().replace(child);
+    app.state::<GatewayState>()
+        .child
+        .lock()
+        .unwrap()
+        .replace(child);
 
     // Wait for /healthz. Model download/load happens before uvicorn serves.
     for elapsed in 1..=READY_TIMEOUT_S {
@@ -199,7 +228,10 @@ async fn ensure_inner(app: &AppHandle) {
                         emit(
                             app,
                             "error",
-                            format!("gateway exited during startup ({status}); see {}", log_path_display()),
+                            format!(
+                                "gateway exited during startup ({status}); see {}",
+                                log_path_display()
+                            ),
                         );
                         return;
                     }
@@ -222,11 +254,19 @@ async fn ensure_inner(app: &AppHandle) {
     emit(
         app,
         "error",
-        format!("gateway did not become ready within {READY_TIMEOUT_S}s; see {}", log_path_display()),
+        format!(
+            "gateway did not become ready within {READY_TIMEOUT_S}s; see {}",
+            log_path_display()
+        ),
     );
 }
 
-fn spawn_gateway(launch: &Launch, host: &str, port: u16, cfg: &AppConfig) -> std::io::Result<Child> {
+fn spawn_gateway(
+    launch: &Launch,
+    host: &str,
+    port: u16,
+    cfg: &AppConfig,
+) -> std::io::Result<Child> {
     let port_s = port.to_string();
     let mut cmd = match launch {
         Launch::Binary(path) => {
@@ -251,7 +291,10 @@ fn spawn_gateway(launch: &Launch, host: &str, port: u16, cfg: &AppConfig) -> std
                 cmd
             }
         }
-        Launch::Uvicorn { python, gateway_dir } => {
+        Launch::Uvicorn {
+            python,
+            gateway_dir,
+        } => {
             #[cfg(unix)]
             {
                 let mut cmd = Command::new(python);
@@ -354,7 +397,12 @@ fn log_file() -> Option<(Stdio, Stdio)> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let file = OpenOptions::new().create(true).write(true).truncate(true).open(path).ok()?;
+    let file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)
+        .ok()?;
     let clone = file.try_clone().ok()?;
     Some((Stdio::from(file), Stdio::from(clone)))
 }
@@ -405,11 +453,18 @@ fn find_launch(app: &AppHandle) -> Option<Launch> {
         starts.push(cwd);
     }
     let gateway_dir = find_repo_gateway(&starts)?;
-    Some(Launch::Uvicorn { python: python_for(&gateway_dir), gateway_dir })
+    Some(Launch::Uvicorn {
+        python: python_for(&gateway_dir),
+        gateway_dir,
+    })
 }
 
 fn gateway_binary_candidates(dir: &Path) -> [PathBuf; 4] {
-    let exe = if cfg!(windows) { "whispr-gateway.exe" } else { "whispr-gateway" };
+    let exe = if cfg!(windows) {
+        "whispr-gateway.exe"
+    } else {
+        "whispr-gateway"
+    };
     [
         dir.join(exe),
         dir.join("whispr-gateway").join(exe), // PyInstaller onedir
@@ -459,11 +514,19 @@ fn endpoint(url: &str) -> Option<(String, u16)> {
     }
     match authority.rfind(':') {
         Some(idx) if authority[idx + 1..].chars().all(|c| c.is_ascii_digit()) => {
-            let host = authority[..idx].trim_start_matches('[').trim_end_matches(']');
+            let host = authority[..idx]
+                .trim_start_matches('[')
+                .trim_end_matches(']');
             let port: u16 = authority[idx + 1..].parse().ok()?;
             Some((host.to_string(), port))
         }
-        _ => Some((authority.trim_start_matches('[').trim_end_matches(']').to_string(), 80)),
+        _ => Some((
+            authority
+                .trim_start_matches('[')
+                .trim_end_matches(']')
+                .to_string(),
+            80,
+        )),
     }
 }
 
@@ -509,8 +572,14 @@ mod tests {
 
     #[test]
     fn endpoint_parses_hosts_without_port_and_ipv6() {
-        assert_eq!(endpoint("ws://localhost/v1/stream"), Some(("localhost".into(), 80)));
-        assert_eq!(endpoint("ws://[::1]:8765/v1/stream"), Some(("::1".into(), 8765)));
+        assert_eq!(
+            endpoint("ws://localhost/v1/stream"),
+            Some(("localhost".into(), 80))
+        );
+        assert_eq!(
+            endpoint("ws://[::1]:8765/v1/stream"),
+            Some(("::1".into(), 8765))
+        );
         assert_eq!(endpoint("not a url"), None);
     }
 

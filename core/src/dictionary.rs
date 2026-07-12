@@ -107,7 +107,10 @@ mod tests {
 
     #[test]
     fn whole_utterance_trigger_expands() {
-        assert_eq!(engine().expand("My signature."), "Best regards,\nDimitar Grigorov");
+        assert_eq!(
+            engine().expand("My signature."),
+            "Best regards,\nDimitar Grigorov"
+        );
     }
 
     #[test]
@@ -126,6 +129,9 @@ mod tests {
 
     #[test]
     fn no_trigger_passthrough() {
-        assert_eq!(engine().expand("Nothing to see here."), "Nothing to see here.");
+        assert_eq!(
+            engine().expand("Nothing to see here."),
+            "Nothing to see here."
+        );
     }
 }

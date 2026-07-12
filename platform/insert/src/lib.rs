@@ -49,7 +49,9 @@ pub fn insert_text(text: &str, method: InsertMethod) -> Result<InsertedVia> {
         return Ok(InsertedVia::Type);
     }
     match method {
-        InsertMethod::Accessibility => accessibility::insert(text).map(|_| InsertedVia::Accessibility),
+        InsertMethod::Accessibility => {
+            accessibility::insert(text).map(|_| InsertedVia::Accessibility)
+        }
         InsertMethod::Paste => paste_insert(text).map(|_| InsertedVia::Paste),
         InsertMethod::Type => type_insert(text).map(|_| InsertedVia::Type),
         InsertMethod::Auto => {
@@ -78,10 +80,20 @@ fn paste_insert(text: &str) -> Result<()> {
     sleep(Duration::from_millis(60));
 
     let mut enigo = Enigo::new(&Settings::default()).context("cannot create input synthesizer")?;
-    let modifier = if cfg!(target_os = "macos") { Key::Meta } else { Key::Control };
-    enigo.key(modifier, Direction::Press).context("modifier press failed")?;
-    enigo.key(Key::Unicode('v'), Direction::Click).context("paste key failed")?;
-    enigo.key(modifier, Direction::Release).context("modifier release failed")?;
+    let modifier = if cfg!(target_os = "macos") {
+        Key::Meta
+    } else {
+        Key::Control
+    };
+    enigo
+        .key(modifier, Direction::Press)
+        .context("modifier press failed")?;
+    enigo
+        .key(Key::Unicode('v'), Direction::Click)
+        .context("paste key failed")?;
+    enigo
+        .key(modifier, Direction::Release)
+        .context("modifier release failed")?;
 
     // Let the paste land before restoring the clipboard.
     sleep(Duration::from_millis(150));
@@ -96,4 +108,33 @@ fn type_insert(text: &str) -> Result<()> {
     let mut enigo = Enigo::new(&Settings::default()).context("cannot create input synthesizer")?;
     enigo.text(text).context("synthetic typing failed")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insertion_method_values_match_settings_ui() {
+        assert_eq!(InsertMethod::parse("auto"), InsertMethod::Auto);
+        assert_eq!(InsertMethod::parse("paste"), InsertMethod::Paste);
+        assert_eq!(InsertMethod::parse("type"), InsertMethod::Type);
+        assert_eq!(
+            InsertMethod::parse("accessibility"),
+            InsertMethod::Accessibility
+        );
+    }
+
+    #[test]
+    fn unknown_insertion_method_falls_back_safely() {
+        assert_eq!(InsertMethod::parse("invalid"), InsertMethod::Auto);
+    }
+
+    #[test]
+    fn empty_text_does_not_touch_clipboard_or_keyboard() {
+        assert_eq!(
+            insert_text("", InsertMethod::Auto).unwrap(),
+            InsertedVia::Type
+        );
+    }
 }

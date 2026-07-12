@@ -37,7 +37,9 @@ pub struct PolishOptions {
 
 impl Default for PolishOptions {
     fn default() -> Self {
-        Self { mode: "fillers".to_string() }
+        Self {
+            mode: "fillers".to_string(),
+        }
     }
 }
 
@@ -63,12 +65,16 @@ pub enum ClientMessage {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
     Ready,
-    Partial { text: String },
+    Partial {
+        text: String,
+    },
     Final {
         text: String,
         raw_text: String,
         #[serde(default)]
         duration_ms: u64,
     },
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }

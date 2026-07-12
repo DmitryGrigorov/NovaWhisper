@@ -4,14 +4,25 @@
 <meta charset="utf-8" />
 <title>Whispr</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: dark; height: 100%; }
   * { box-sizing: border-box; }
   body {
-    margin: 0; padding: 24px 28px; font: 14px/1.5 system-ui, sans-serif;
-    background: #14141f; color: #e8e8f0;
+    margin: 0; padding: 24px 28px 104px; font: 14px/1.5 system-ui, sans-serif;
+    min-height: 100%; overflow-y: auto; background: #14141f; color: #e8e8f0;
   }
-  h1 { font-size: 20px; margin: 0 0 2px; }
-  .sub { color: #9a9ab0; margin: 0 0 20px; font-size: 13px; }
+  .app-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+  h1 { font-size: 22px; letter-spacing: -.02em; margin: 0 0 2px; }
+  .sub { color: #9a9ab0; margin: 0; font-size: 13px; }
+  .app-state {
+    display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; margin-top: 3px;
+    padding: 5px 9px; border: 1px solid #35354c; border-radius: 999px;
+    background: #1c1c2b; color: #aaaac0; font-size: 11.5px; font-weight: 650;
+  }
+  .app-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #77778f; }
+  .app-state.ready { color: #86efac; border-color: #285d3b; background: #172a21; }
+  .app-state.ready::before { background: #4ade80; box-shadow: 0 0 0 3px #4ade8022; }
+  .app-state.recording { color: #fda4af; border-color: #713838; background: #301d24; }
+  .app-state.recording::before { background: #fb7185; box-shadow: 0 0 0 3px #fb718522; }
   .section {
     margin: 0 0 22px; padding: 16px; border: 1px solid #303047;
     border-radius: 14px; background: linear-gradient(145deg, #1c1c2b, #181824);
@@ -20,6 +31,8 @@
   .section-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
   .section-title h2 { margin: 0; font-size: 15px; }
   .section-title p { margin: 1px 0 0; color: #85859e; font-size: 11.5px; }
+  .settings-section h2 { margin: 0; font-size: 15px; }
+  .settings-section > .section-copy { margin: 2px 0 4px; color: #85859e; font-size: 12px; }
   .clipboard-icon {
     display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto;
     border-radius: 9px; background: #4f46e526; color: #a5a0ff; font-size: 17px;
@@ -67,19 +80,35 @@
     width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #33334a;
     background: #1d1d2c; color: #e8e8f0; font: inherit;
   }
+  input:hover, select:hover, textarea:hover { border-color: #484866; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid #8b83ff; outline-offset: 2px;
+  }
+  select:disabled { opacity: .5; cursor: not-allowed; }
   textarea { min-height: 72px; font-family: ui-monospace, monospace; font-size: 12.5px; }
   .row { display: flex; gap: 12px; }
   .row > div { flex: 1; }
   .hint { color: #77778f; font-size: 12px; margin-top: 3px; }
   .check { display: flex; align-items: center; gap: 8px; margin: 14px 0 4px; font-weight: 600; font-size: 13px; }
   .check input { width: auto; margin: 0; }
-  .buttons { display: flex; gap: 10px; margin-top: 22px; }
+  .advanced { margin-top: 14px; border-top: 1px solid #2d2d42; padding-top: 10px; }
+  .advanced summary { color: #aaaac0; cursor: pointer; font-weight: 650; font-size: 12.5px; }
+  .advanced summary:hover { color: #e8e8f0; }
+  .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  button.danger { background: #4a252d; color: #fecdd3; border: 1px solid #713838; }
+  .buttons {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; gap: 9px;
+    padding: 14px 28px; border-top: 1px solid #303047; background: #14141ff2;
+    box-shadow: 0 -10px 30px #0005; backdrop-filter: blur(12px);
+  }
+  .buttons #save { margin-left: auto; order: 4; }
   button {
     padding: 9px 16px; border-radius: 8px; border: none; font: inherit; font-weight: 600;
     background: #4f46e5; color: white; cursor: pointer;
   }
   button.secondary { background: #2b2b40; }
   button:hover { filter: brightness(1.15); }
+  button:active { transform: translateY(1px); }
   #status { margin-top: 14px; min-height: 20px; font-size: 13px; color: #8f8fa8; }
   #gatewayProgress {
     display: none; align-items: center; gap: 12px; margin-top: 14px; padding: 12px 14px;
@@ -93,7 +122,7 @@
   .gateway-progress-copy strong { display: block; font-size: 13px; }
   .gateway-progress-copy span { display: block; color: #9898b2; font-size: 11.5px; margin-top: 2px; }
   #toast {
-    position: fixed; right: 22px; bottom: 22px; z-index: 20; max-width: 360px;
+    position: fixed; right: 22px; bottom: 86px; z-index: 20; max-width: 360px;
     padding: 11px 14px; border: 1px solid #42425e; border-radius: 10px;
     background: #292940; color: #f1f1f8; box-shadow: 0 10px 35px #0008;
     opacity: 0; transform: translateY(10px); pointer-events: none;
@@ -108,11 +137,27 @@
     font-size: 12px; white-space: pre-wrap;
   }
   .ok { color: #4ade80; } .err { color: #f87171; }
+  @media (max-width: 620px) {
+    body { padding: 18px 18px 150px; }
+    .row { display: grid; grid-template-columns: 1fr; gap: 0; }
+    .buttons { padding: 10px 18px; display: grid; grid-template-columns: 1fr 1fr; }
+    .buttons #save { margin-left: 0; order: 0; grid-column: 1 / -1; }
+    .section-head { align-items: flex-start; }
+    .section-actions { flex-direction: column; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
 </style>
 </head>
 <body>
-  <h1>Whispr</h1>
-  <p class="sub">Voice to text, anywhere. Press the global hotkey in any app to dictate.</p>
+  <header class="app-head">
+    <div>
+      <h1>Whispr</h1>
+      <p class="sub">Voice to text, anywhere. Press the global hotkey in any app to dictate.</p>
+    </div>
+    <div id="appState" class="app-state" role="status" aria-live="polite">Not connected</div>
+  </header>
 
   <section class="section" aria-labelledby="clipboardTitle">
     <div class="section-head">
@@ -120,7 +165,7 @@
         <div class="clipboard-icon" aria-hidden="true">▣</div>
         <div>
           <h2 id="clipboardTitle">Voice clipboard</h2>
-          <p>Your recent transcripts stay on this Mac.</p>
+          <p>Your recent transcripts stay on this device.</p>
         </div>
       </div>
       <div class="section-actions">
@@ -139,11 +184,10 @@
     <div id="clipboardList" aria-live="polite"></div>
   </section>
 
+  <section class="section settings-section" aria-labelledby="everydayTitle">
+  <h2 id="everydayTitle">Everyday settings</h2>
+  <p class="section-copy">Choose how dictation starts, listens, and displays feedback.</p>
   <div class="row">
-    <div>
-      <label for="gateway_url">Gateway URL</label>
-      <input id="gateway_url" placeholder="ws://127.0.0.1:8765/v1/stream" />
-    </div>
     <div>
       <label for="hotkey">Global hotkey</label>
       <input id="hotkey" placeholder="Click, then press a shortcut" readonly />
@@ -157,6 +201,17 @@
   </select>
   <div class="hint">The selected microphone is used the next time dictation starts.</div>
 
+  <label class="check"><input type="checkbox" id="show_hud" /> Show the HUD while dictating</label>
+  <div class="hint">Off by default. Dictation continues normally without showing an overlay.</div>
+
+  <label class="check"><input type="checkbox" id="autohide_hud" /> Automatically hide the HUD after each dictation</label>
+  <div class="hint">Turn this off to keep the completed transcript visible until you hide the HUD manually.</div>
+
+  </section>
+
+  <section class="section settings-section" aria-labelledby="languageInsertTitle">
+  <h2 id="languageInsertTitle">Language &amp; insertion</h2>
+  <p class="section-copy">Control recognition language, transcript cleanup, and how text reaches the focused app.</p>
   <div class="row">
     <div>
       <label for="language">Language</label>
@@ -190,8 +245,19 @@
     </div>
   </div>
 
+  <div class="hint">Use “Test insertion” below to verify the selected method in any editable field.</div>
+  </section>
+
+  <section class="section settings-section" aria-labelledby="speechTitle">
+  <h2 id="speechTitle">Speech engine</h2>
+  <p class="section-copy">Run speech recognition privately on this computer or use a cloud provider.</p>
   <label class="check"><input type="checkbox" id="manage_gateway" /> Start &amp; stop the local gateway with the app</label>
   <div class="hint">When enabled, the app launches the speech gateway on startup and stops it on quit. A gateway that is already running is used as-is and never stopped.</div>
+  <div class="inline-actions" aria-label="Server controls">
+    <button id="startGateway" class="secondary">Start server</button>
+    <button id="restartGateway" class="secondary">Restart server</button>
+    <button id="stopGateway" class="danger">Stop server</button>
+  </div>
 
   <div class="row">
     <div>
@@ -257,16 +323,28 @@
   </div>
   <div class="hint">Saving these restarts the managed gateway. The first start of a new model downloads it (large-v3 ≈ 3 GB).</div>
 
+  <details class="advanced">
+    <summary>Advanced connection settings</summary>
+    <label for="gateway_url">Gateway URL</label>
+    <input id="gateway_url" placeholder="ws://127.0.0.1:8765/v1/stream" spellcheck="false" />
+    <div class="hint">Change this only when connecting to a gateway at a custom address.</div>
+  </details>
+  </section>
+
+  <section class="section settings-section" aria-labelledby="personalTitle">
+  <h2 id="personalTitle">Personalization</h2>
+  <p class="section-copy">Teach Whispr preferred spelling and reusable spoken shortcuts.</p>
   <label for="dictionary">Personal dictionary <span class="hint">— one term per line; used for recognition boosting and exact casing</span></label>
   <textarea id="dictionary" placeholder="Whispr&#10;Grigorov&#10;PostgreSQL"></textarea>
 
   <label for="snippets">Snippets <span class="hint">— one per line: spoken trigger :: expansion (use \n for line breaks)</span></label>
   <textarea id="snippets" placeholder="my signature :: Best regards,\nDimitar&#10;standup link :: https://meet.example.com/standup"></textarea>
+  </section>
 
   <div class="buttons">
-    <button id="save">Save settings</button>
-    <button id="startGateway" class="secondary">Start gateway</button>
-    <button id="toggle" class="secondary">Start/Stop dictation</button>
+    <button id="save">Save changes</button>
+    <button id="toggle" class="secondary">Start dictation</button>
+    <button id="hideHud" class="secondary">Hide HUD</button>
     <button id="testInsert" class="secondary">Test insertion (3s delay)</button>
   </div>
   <div id="gatewayProgress" role="status" aria-live="polite">
@@ -276,7 +354,7 @@
       <span id="gatewayProgressHint">The first download can take several minutes.</span>
     </div>
   </div>
-  <div id="status"></div>
+  <div id="status" role="status" aria-live="polite"></div>
   <div id="log"></div>
   <div id="toast" role="alert" aria-live="assertive"></div>
 
@@ -305,6 +383,25 @@
     toast.className = `visible ${cls}`.trim();
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { toast.className = ""; }, 6000);
+  }
+
+  function setAppState(state, label) {
+    const indicator = $("appState");
+    indicator.className = `app-state ${state || ""}`.trim();
+    indicator.textContent = label;
+  }
+
+  function updateProviderControls() {
+    const provider = $("stt_provider").value;
+    const usesWhisper = provider === "auto" || provider === "whisper_local";
+    for (const id of ["whisper_model", "whisper_device", "whisper_compute"]) {
+      $(id).disabled = !usesWhisper;
+    }
+  }
+
+  function updateHudControls() {
+    const enabled = $("show_hud").checked;
+    $("autohide_hud").disabled = !enabled;
   }
 
   function setGatewayProgress(state, message = "") {
@@ -480,11 +577,22 @@
     config = await invoke("get_config");
     $("gateway_url").value = config.gateway_url;
     $("hotkey").value = config.hotkey;
-    $("language").value = config.language;
+    const configuredLanguage = config.language || "auto";
+    if (![...$("language").options].some((option) => option.value === configuredLanguage)) {
+      const customLanguage = document.createElement("option");
+      customLanguage.value = configuredLanguage;
+      customLanguage.textContent = `${configuredLanguage} (custom)`;
+      $("language").appendChild(customLanguage);
+    }
+    $("language").value = configuredLanguage;
     $("polish_mode").value = config.polish_mode;
     $("insert_method").value = config.insert_method;
+    $("show_hud").checked = config.show_hud === true;
+    $("autohide_hud").checked = config.autohide_hud !== false;
+    updateHudControls();
     $("manage_gateway").checked = config.manage_gateway !== false;
     $("stt_provider").value = config.stt_provider || "auto";
+    updateProviderControls();
     const configuredModel = config.whisper_model || "large-v3";
     if (![...$("whisper_model").options].some((option) => option.value === configuredModel)) {
       const custom = document.createElement("option");
@@ -516,6 +624,9 @@
       .join("\n");
   }
 
+  $("stt_provider").addEventListener("change", updateProviderControls);
+  $("show_hud").addEventListener("change", updateHudControls);
+
   $("save").addEventListener("click", async () => {
     try {
       config.gateway_url = $("gateway_url").value.trim();
@@ -523,6 +634,8 @@
       config.language = $("language").value;
       config.polish_mode = $("polish_mode").value;
       config.insert_method = $("insert_method").value;
+      config.show_hud = $("show_hud").checked;
+      config.autohide_hud = $("autohide_hud").checked;
       config.manage_gateway = $("manage_gateway").checked;
       config.stt_provider = $("stt_provider").value;
       config.whisper_model = $("whisper_model").value.trim() || "large-v3";
@@ -549,6 +662,8 @@
   $("toggle").addEventListener("click", async () => {
     try {
       const recording = await invoke("toggle_dictation");
+      $("toggle").textContent = recording ? "Stop dictation" : "Start dictation";
+      setAppState(recording ? "recording" : "ready", recording ? "Recording" : "Ready");
       status(recording ? "Recording…" : "Stopped.");
     } catch (e) {
       status(`${e}`, "err");
@@ -563,6 +678,36 @@
       status("Gateway start requested. Check the event log for readiness.", "ok");
     } catch (e) {
       status(`Gateway start failed: ${e}`, "err");
+    }
+  });
+
+  $("restartGateway").addEventListener("click", async () => {
+    try {
+      status("Restarting server…");
+      setGatewayProgress("starting");
+      await invoke("restart_gateway");
+      status("Server restart requested. Waiting for readiness…", "ok");
+    } catch (e) {
+      status(`Server restart failed: ${e}`, "err");
+    }
+  });
+
+  $("stopGateway").addEventListener("click", async () => {
+    try {
+      status("Stopping server…");
+      await invoke("stop_gateway");
+      status("Managed server stopped.", "ok");
+    } catch (e) {
+      status(`Server was not stopped: ${e}`, "err");
+    }
+  });
+
+  $("hideHud").addEventListener("click", async () => {
+    try {
+      await invoke("hide_hud");
+      status("HUD hidden.", "ok");
+    } catch (e) {
+      status(`Could not hide HUD: ${e}`, "err");
     }
   });
 
@@ -601,6 +746,8 @@
     switch (payload.kind) {
       case "status":
         log(payload.recording ? "● recording started" : "○ recording stopped");
+        $("toggle").textContent = payload.recording ? "Stop dictation" : "Start dictation";
+        setAppState(payload.recording ? "recording" : "ready", payload.recording ? "Recording" : "Ready");
         if (payload.recording) setClipboardLoading("listening");
         else if ($("clipboardLoader").classList.contains("visible")) setClipboardLoading("transcribing");
         break;
@@ -614,9 +761,16 @@
       case "gateway":
         log(`gateway: ${payload.message}`, payload.state === "error" ? "err" : payload.state === "ready" ? "ok" : "");
         if (payload.state === "starting") setGatewayProgress("starting", payload.message);
-        else if (payload.state === "ready" || payload.state === "external") setGatewayProgress("ready", payload.message);
-        else if (payload.state === "error") setGatewayProgress("error", payload.message);
-        else if (payload.state === "stopped") $("gatewayProgress").className = "";
+        else if (payload.state === "ready" || payload.state === "external") {
+          setGatewayProgress("ready", payload.message);
+          setAppState("ready", "Ready");
+        } else if (payload.state === "error") {
+          setGatewayProgress("error", payload.message);
+          setAppState("", "Needs attention");
+        } else if (payload.state === "stopped") {
+          $("gatewayProgress").className = "";
+          setAppState("", "Not connected");
+        }
         break;
       case "error":
         setClipboardLoading(null);

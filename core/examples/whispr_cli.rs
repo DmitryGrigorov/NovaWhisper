@@ -38,8 +38,8 @@ struct Args {
 }
 
 fn load_wav_as_16k_mono(path: &str) -> Result<Vec<i16>> {
-    let mut reader = hound::WavReader::open(path)
-        .with_context(|| format!("cannot open wav file {path}"))?;
+    let mut reader =
+        hound::WavReader::open(path).with_context(|| format!("cannot open wav file {path}"))?;
     let spec = reader.spec();
     let mono: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Int => {
@@ -51,8 +51,9 @@ fn load_wav_as_16k_mono(path: &str) -> Result<Vec<i16>> {
             mix_channels(&samples, spec.channels as usize)
         }
         hound::SampleFormat::Float => {
-            let samples: Vec<f32> =
-                reader.samples::<f32>().collect::<std::result::Result<_, _>>()?;
+            let samples: Vec<f32> = reader
+                .samples::<f32>()
+                .collect::<std::result::Result<_, _>>()?;
             mix_channels(&samples, spec.channels as usize)
         }
     };
@@ -77,9 +78,14 @@ async fn main() -> Result<()> {
     let start = ClientMessage::Start {
         audio: AudioSpec::default(),
         language: args.language.clone(),
-        context: SessionContext { app: Some("whispr-cli".into()), style: None },
+        context: SessionContext {
+            app: Some("whispr-cli".into()),
+            style: None,
+        },
         dictionary: vec![],
-        polish: PolishOptions { mode: args.polish.clone() },
+        polish: PolishOptions {
+            mode: args.polish.clone(),
+        },
     };
 
     let (events_tx, mut events_rx) = mpsc::channel::<StreamEvent>(64);
@@ -90,7 +96,11 @@ async fn main() -> Result<()> {
             match event {
                 StreamEvent::Ready => eprintln!("[ready]"),
                 StreamEvent::Partial(t) => eprintln!("[partial] {t}"),
-                StreamEvent::Final { text, raw_text, duration_ms } => {
+                StreamEvent::Final {
+                    text,
+                    raw_text,
+                    duration_ms,
+                } => {
                     eprintln!("[final raw]      {raw_text}");
                     eprintln!("[final polished] {text}  ({duration_ms} ms)");
                     println!("{text}");

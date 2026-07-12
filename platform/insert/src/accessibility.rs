@@ -4,12 +4,12 @@
 //! return Ok, or return an error to fall through to the paste tier. These are
 //! the P0->P1 hardening points per docs/ARCHITECTURE.md §3:
 //!
-//! - macOS:  AXUIElementSetAttributeValue(kAXSelectedTextAttribute) on the
-//!           focused element (requires AXIsProcessTrusted).
+//! - macOS: AXUIElementSetAttributeValue(kAXSelectedTextAttribute) on the
+//!   focused element (requires AXIsProcessTrusted).
 //! - Windows: IUIAutomation focused element -> ValuePattern.SetValue /
-//!           TextPattern selection insertion.
-//! - Linux:  AT-SPI2 org.a11y.atspi EditableText.InsertText on the focused
-//!           object (X11 & Wayland; coverage varies by toolkit).
+//!   TextPattern selection insertion.
+//! - Linux: AT-SPI2 org.a11y.atspi EditableText.InsertText on the focused
+//!   object (X11 & Wayland; coverage varies by toolkit).
 
 use anyhow::{bail, Result};
 

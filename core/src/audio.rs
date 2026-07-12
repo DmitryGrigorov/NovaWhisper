@@ -224,8 +224,7 @@ fn capture_thread(
             cpal::SampleFormat::I16 => device.build_input_stream(
                 &config.into(),
                 move |data: &[i16], _| {
-                    let f: Vec<f32> =
-                        data.iter().map(|s| *s as f32 / i16::MAX as f32).collect();
+                    let f: Vec<f32> = data.iter().map(|s| *s as f32 / i16::MAX as f32).collect();
                     mix_mono(&f, channels, &mut mono);
                     on_block(&mono);
                 },
@@ -314,6 +313,8 @@ mod tests {
         let input: Vec<f32> = vec![0.5; 1600];
         let out = resample_to_target(&input, TARGET_SAMPLE_RATE);
         assert_eq!(out.len(), 1600);
-        assert!(out.iter().all(|s| (*s - (0.5 * i16::MAX as f32) as i16).abs() <= 1));
+        assert!(out
+            .iter()
+            .all(|s| (*s - (0.5 * i16::MAX as f32) as i16).abs() <= 1));
     }
 }

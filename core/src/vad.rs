@@ -113,8 +113,7 @@ mod tests {
         (0..n)
             .map(|i| {
                 let t = i as f32 / TARGET_SAMPLE_RATE as f32;
-                ((t * 440.0 * std::f32::consts::TAU).sin() * amplitude * i16::MAX as f32)
-                    as i16
+                ((t * 440.0 * std::f32::consts::TAU).sin() * amplitude * i16::MAX as f32) as i16
             })
             .collect()
     }

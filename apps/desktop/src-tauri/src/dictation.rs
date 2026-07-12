@@ -92,17 +92,24 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
         language: cfg.language.clone(),
         context: SessionContext::default(),
         dictionary: cfg.dictionary.clone(),
-        polish: PolishOptions { mode: cfg.polish_mode.clone() },
+        polish: PolishOptions {
+            mode: cfg.polish_mode.clone(),
+        },
     };
 
-    show_hud(app);
+    if cfg.show_hud {
+        show_hud(app);
+    }
 
     // Streaming task: audio out, transcripts in.
     let url = cfg.gateway_url.clone();
     let stream_app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(e) = stream_utterance(&url, start_msg, audio_rx, stop_rx, events_tx).await {
-            emit(&stream_app, json!({"kind": "error", "message": e.to_string()}));
+            emit(
+                &stream_app,
+                json!({"kind": "error", "message": e.to_string()}),
+            );
         }
     });
 
@@ -119,7 +126,11 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                 StreamEvent::Partial(text) => {
                     emit(&event_app, json!({"kind": "partial", "text": text}));
                 }
-                StreamEvent::Final { text, raw_text, duration_ms } => {
+                StreamEvent::Final {
+                    text,
+                    raw_text,
+                    duration_ms,
+                } => {
                     let final_text = snippets.expand(&text);
                     emit(
                         &event_app,
@@ -143,10 +154,12 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                             ),
                         }
                     }
-                    // Leave the completed transcript visible long enough for
-                    // the user to copy it from the HUD.
-                    tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-                    hide_hud(&event_app);
+                    if cfg.show_hud && cfg.autohide_hud {
+                        // Leave the completed transcript visible long enough
+                        // for the user to copy it from the HUD.
+                        tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+                        hide_hud(&event_app);
+                    }
                 }
                 StreamEvent::Error(message) => {
                     emit(&event_app, json!({"kind": "error", "message": message}));
@@ -174,7 +187,10 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
         }
     });
 
-    Ok(ActiveSession { stop_tx: Some(stop_tx), capture })
+    Ok(ActiveSession {
+        stop_tx: Some(stop_tx),
+        capture,
+    })
 }
 
 /// Drop any leftover session state (e.g. server ended the utterance).

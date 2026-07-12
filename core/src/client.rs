@@ -128,13 +128,17 @@ pub async fn stream_utterance(
         match timeout(final_timeout, drain).await {
             Ok(Ok(true)) => {}
             Ok(Ok(false)) => {
-                emit(StreamEvent::Error("connection closed before final transcript".into()))
-                    .await
+                emit(StreamEvent::Error(
+                    "connection closed before final transcript".into(),
+                ))
+                .await
             }
             Ok(Err(e)) => return Err(e),
             Err(_) => {
-                emit(StreamEvent::Error("timed out waiting for final transcript".into()))
-                    .await
+                emit(StreamEvent::Error(
+                    "timed out waiting for final transcript".into(),
+                ))
+                .await
             }
         }
     }
@@ -145,17 +149,22 @@ pub async fn stream_utterance(
 }
 
 /// Parse a server text frame, emit the matching event; returns true on `final`.
-async fn handle_server_text(
-    text: &str,
-    events_tx: &mpsc::Sender<StreamEvent>,
-) -> Result<bool> {
+async fn handle_server_text(text: &str, events_tx: &mpsc::Sender<StreamEvent>) -> Result<bool> {
     let msg: ServerMessage =
         serde_json::from_str(text).with_context(|| format!("bad server message: {text}"))?;
     let (event, is_final) = match msg {
         ServerMessage::Ready => (StreamEvent::Ready, false),
         ServerMessage::Partial { text } => (StreamEvent::Partial(text), false),
-        ServerMessage::Final { text, raw_text, duration_ms } => (
-            StreamEvent::Final { text, raw_text, duration_ms },
+        ServerMessage::Final {
+            text,
+            raw_text,
+            duration_ms,
+        } => (
+            StreamEvent::Final {
+                text,
+                raw_text,
+                duration_ms,
+            },
             true,
         ),
         ServerMessage::Error { message } => (StreamEvent::Error(message), false),

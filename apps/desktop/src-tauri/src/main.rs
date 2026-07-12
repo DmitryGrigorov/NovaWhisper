@@ -31,6 +31,9 @@ fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         register_hotkey(&app, &config.hotkey)?;
     }
+    if previous.show_hud && !config.show_hud {
+        dictation::hide_hud(&app);
+    }
     let gateway_changed = previous.manage_gateway != config.manage_gateway
         || previous.gateway_url != config.gateway_url
         || previous.stt_provider != config.stt_provider
@@ -51,6 +54,26 @@ fn toggle_dictation(app: AppHandle) -> Result<bool, String> {
 #[tauri::command]
 fn start_gateway(app: AppHandle) {
     gateway::restart(&app);
+}
+
+#[tauri::command]
+fn restart_gateway(app: AppHandle) {
+    gateway::restart(&app);
+}
+
+#[tauri::command]
+fn stop_gateway(app: AppHandle) -> Result<(), String> {
+    if gateway::shutdown(&app) {
+        gateway::emit_stopped(&app);
+        Ok(())
+    } else {
+        Err("No app-managed gateway is running. External gateways are never stopped.".into())
+    }
+}
+
+#[tauri::command]
+fn hide_hud(app: AppHandle) {
+    dictation::hide_hud(&app);
 }
 
 /// Settings-page helper: waits so the user can focus a target field, then
@@ -75,8 +98,7 @@ fn register_hotkey(app: &AppHandle, hotkey: &str) -> Result<(), String> {
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
@@ -103,20 +125,25 @@ fn main() {
             save_config,
             toggle_dictation,
             start_gateway,
+            restart_gateway,
+            stop_gateway,
+            hide_hud,
             test_insert
         ])
         .setup(|app| {
             let handle = app.handle();
 
-            let settings = WebviewWindowBuilder::new(
-                app,
-                "main",
-                WebviewUrl::App("index.html".into()),
-            )
-            .title("Whispr")
-            .inner_size(600.0, 720.0)
-            .visible(true)
-            .build()?;
+            let settings =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("Whispr")
+                    // Keep the initial window inside a 768 px-tall Windows
+                    // work area (title bar + taskbar included). The settings
+                    // page scrolls instead of growing beyond the screen.
+                    .inner_size(600.0, 660.0)
+                    .min_inner_size(480.0, 520.0)
+                    .center()
+                    .visible(true)
+                    .build()?;
 
             // Closing Settings only hides the window. The tray app and managed
             // gateway keep running so model downloads and dictation continue.
@@ -143,11 +170,18 @@ fn main() {
                 MenuItem::with_id(app, "toggle", "Start/Stop Dictation", true, None::<&str>)?;
             let settings_item =
                 MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
-            let gateway_item =
-                MenuItem::with_id(app, "restart-gateway", "Restart Gateway", true, None::<&str>)?;
+            let gateway_item = MenuItem::with_id(
+                app,
+                "restart-gateway",
+                "Restart Gateway",
+                true,
+                None::<&str>,
+            )?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit Whispr", true, None::<&str>)?;
-            let menu =
-                Menu::with_items(app, &[&toggle_item, &settings_item, &gateway_item, &quit_item])?;
+            let menu = Menu::with_items(
+                app,
+                &[&toggle_item, &settings_item, &gateway_item, &quit_item],
+            )?;
 
             TrayIconBuilder::with_id("whispr-tray")
                 .icon(app.default_window_icon().unwrap().clone())
@@ -187,9 +221,10 @@ fn main() {
                 let handle = handle.clone();
                 tauri::async_runtime::spawn(async move {
                     use tokio::signal::unix::{signal, SignalKind};
-                    let (Ok(mut term), Ok(mut int)) =
-                        (signal(SignalKind::terminate()), signal(SignalKind::interrupt()))
-                    else {
+                    let (Ok(mut term), Ok(mut int)) = (
+                        signal(SignalKind::terminate()),
+                        signal(SignalKind::interrupt()),
+                    ) else {
                         return;
                     };
                     tokio::select! {
