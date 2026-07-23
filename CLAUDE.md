@@ -13,7 +13,8 @@ Read before changing code:
 - `docs/SKILLS.md` — build/run/test commands, no-mic E2E verification, and task
   recipes for providers, protocol changes, settings, insertion, packaging, and VAD.
 - `docs/ARCHITECTURE.md` — stack rationale, roadmap, and risk register.
-- `README.md` / `README.ru.md` — installation, setup, and supported environment details.
+- `docs/INSTALL.md` — full per-platform installation, packaging, and troubleshooting.
+- `README.md` / `README.ru.md` — project purpose and quick start only.
 
 Quick commands:
 
