@@ -2,7 +2,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import MAX_AUDIO_FRAME_BYTES, app
 
 START = {
     "type": "start",
@@ -51,3 +51,22 @@ def test_rejects_bad_first_message(monkeypatch):
         ws.send_text(json.dumps({"type": "stop"}))
         msg = ws.receive_json()
         assert msg["type"] == "error"
+
+
+def test_rejects_invalid_dictionary(monkeypatch):
+    monkeypatch.setenv("WHISPR_STT_PROVIDER", "mock")
+    client = TestClient(app)
+    with client.websocket_connect("/v1/stream") as ws:
+        invalid = {**START, "dictionary": "not-a-list"}
+        ws.send_text(json.dumps(invalid))
+        assert ws.receive_json() == {"type": "error", "message": "invalid dictionary"}
+
+
+def test_rejects_oversized_audio_frame(monkeypatch):
+    monkeypatch.setenv("WHISPR_STT_PROVIDER", "mock")
+    client = TestClient(app)
+    with client.websocket_connect("/v1/stream") as ws:
+        ws.send_text(json.dumps(START))
+        assert ws.receive_json() == {"type": "ready"}
+        ws.send_bytes(b"\x00\x00" * (MAX_AUDIO_FRAME_BYTES // 2 + 1))
+        assert ws.receive_json() == {"type": "error", "message": "invalid audio frame"}

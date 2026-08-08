@@ -1,0 +1,26 @@
+app-id: ai.whispr.desktop
+runtime: org.gnome.Platform
+runtime-version: "47"
+sdk: org.gnome.Sdk
+command: whispr-desktop
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --talk-name=org.freedesktop.portal.GlobalShortcuts
+modules:
+  - name: novawhisper
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 whispr-desktop /app/bin/whispr-desktop
+      - cp -a gateway /app/bin/gateway
+      - install -Dm644 ai.whispr.desktop.desktop /app/share/applications/ai.whispr.desktop.desktop
+      - install -Dm644 icon.png /app/share/icons/hicolor/256x256/apps/ai.whispr.desktop.png
+    sources:
+      # Populate this directory with the Linux release binary, staged gateway,
+      # desktop file and icon before invoking flatpak-builder.
+      - type: dir
+        path: payload

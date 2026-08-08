@@ -123,6 +123,9 @@ impl AudioCapture {
     /// Start capturing from the selected input device, or the system default
     /// when `device_name` is `None`.
     pub fn start(chunk_ms: u32, device_name: Option<&str>) -> Result<CaptureHandle> {
+        if !(10..=1_000).contains(&chunk_ms) {
+            return Err(anyhow!("audio chunk size must be between 10 and 1000 ms"));
+        }
         let (audio_tx, audio_rx) = mpsc::channel::<Vec<i16>>(128);
         let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
         let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<()>>();

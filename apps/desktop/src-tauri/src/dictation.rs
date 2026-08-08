@@ -64,14 +64,12 @@ pub fn copy_latest(app: &AppHandle) {
         return;
     }
     let main_app = app.clone();
-    let scheduled = app.run_on_main_thread(move || {
-        match whispr_insert::copy_to_clipboard(&text) {
-            Ok(()) => emit(&main_app, json!({"kind": "copied", "text": text})),
-            Err(e) => emit(
-                &main_app,
-                json!({"kind": "error", "message": format!("copy failed: {e}")}),
-            ),
-        }
+    let scheduled = app.run_on_main_thread(move || match whispr_insert::copy_to_clipboard(&text) {
+        Ok(()) => emit(&main_app, json!({"kind": "copied", "text": text})),
+        Err(e) => emit(
+            &main_app,
+            json!({"kind": "error", "message": format!("copy failed: {e}")}),
+        ),
     });
     if let Err(e) = scheduled {
         emit(
@@ -105,10 +103,7 @@ pub fn set_tray_status(app: &AppHandle, status: TrayStatus) {
             Some(dot_icon([0xE5, 0x3E, 0x3E])),
             "Whispr — recording… (press the hotkey to stop)",
         ),
-        TrayStatus::Transcribing => (
-            Some(dot_icon([0xF0, 0xA8, 0x2E])),
-            "Whispr — transcribing…",
-        ),
+        TrayStatus::Transcribing => (Some(dot_icon([0xF0, 0xA8, 0x2E])), "Whispr — transcribing…"),
     };
     if let Some(icon) = icon {
         let _ = tray.set_icon(Some(icon));
@@ -209,7 +204,9 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                 &stream_app,
                 json!({"kind": "error", "message": e.to_string()}),
             );
-            set_tray_status(&stream_app, TrayStatus::Idle);
+            // A connection/protocol failure otherwise leaves the capture
+            // thread and session state alive until the user toggles again.
+            finish_session(&stream_app);
         }
     });
 
@@ -268,10 +265,10 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                 }
                 StreamEvent::Error(message) => {
                     emit(&event_app, json!({"kind": "error", "message": message}));
-                    set_tray_status(&event_app, TrayStatus::Idle);
+                    finish_session(&event_app);
                 }
                 StreamEvent::Closed => {
-                    set_tray_status(&event_app, TrayStatus::Idle);
+                    finish_session(&event_app);
                 }
             }
         }

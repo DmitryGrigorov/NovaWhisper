@@ -1,5 +1,8 @@
 {
   "bundle": {
-    "targets": ["dmg"]
+    "targets": ["app", "dmg"],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
   }
 }

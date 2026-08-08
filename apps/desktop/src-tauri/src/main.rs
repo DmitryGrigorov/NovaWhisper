@@ -25,8 +25,7 @@ fn list_microphones() -> Result<Vec<String>, String> {
 fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
     let previous = AppConfig::load();
     config.save().map_err(|e| e.to_string())?;
-    if previous.hotkey != config.hotkey
-        || previous.copy_latest_hotkey != config.copy_latest_hotkey
+    if previous.hotkey != config.hotkey || previous.copy_latest_hotkey != config.copy_latest_hotkey
     {
         app.global_shortcut()
             .unregister_all()

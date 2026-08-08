@@ -7,6 +7,7 @@ documented in app/main.py.
 """
 
 import argparse
+import ipaddress
 import multiprocessing
 
 
@@ -15,7 +16,19 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--log-level", default="info")
+    parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="allow binding outside loopback (unsafe without a reverse proxy and authentication)",
+    )
     args = parser.parse_args()
+
+    try:
+        is_loopback = ipaddress.ip_address(args.host).is_loopback
+    except ValueError:
+        is_loopback = args.host.lower() == "localhost"
+    if not is_loopback and not args.allow_remote:
+        parser.error("refusing a non-loopback bind; pass --allow-remote explicitly")
 
     import uvicorn
 
