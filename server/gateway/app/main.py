@@ -52,6 +52,7 @@ async def healthz() -> dict:
 async def stream(ws: WebSocket) -> None:
     await ws.accept()
     session = None
+    session_finished = False
     forwarder = None
     try:
         start_raw = await ws.receive_text()
@@ -127,6 +128,10 @@ async def stream(ws: WebSocket) -> None:
                 if control.get("type") == "stop":
                     break
 
+        # Mark first: finish() must run at most once per session, even if it
+        # raises. A second call repeats the provider's final decode and pushes
+        # a second end sentinel to partial_queue.
+        session_finished = True
         raw_text = await session.finish()
         await forwarder
 
@@ -158,7 +163,9 @@ async def stream(ws: WebSocket) -> None:
     finally:
         if forwarder is not None and not forwarder.done():
             forwarder.cancel()
-        if session is not None:
+        if session is not None and not session_finished:
+            # Early exit (disconnect, invalid frame, error): release the
+            # provider's resources.
             try:
                 await session.finish()
             except Exception:

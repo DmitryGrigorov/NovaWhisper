@@ -1,15 +1,25 @@
 //! Dictation session lifecycle: hotkey toggle -> capture -> stream -> insert.
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Mutex,
 };
 
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::{mpsc, oneshot};
 
 static HUD_POSITIONED: AtomicBool = AtomicBool::new(false);
-use tokio::sync::{mpsc, oneshot};
+
+/// Id of the most recently started session. A stopped session keeps
+/// delivering events (final transcript, close) while a newer one may already
+/// be recording; those late events must not touch the newer session, the tray
+/// or the HUD. Only written while the `DictationState` lock is held.
+static LATEST_SESSION: AtomicU64 = AtomicU64::new(0);
+
+fn is_latest_session(id: u64) -> bool {
+    LATEST_SESSION.load(Ordering::SeqCst) == id
+}
 
 use whispr_core::audio::{AudioCapture, CaptureHandle};
 use whispr_core::client::{stream_utterance, StreamEvent};
@@ -133,6 +143,7 @@ fn dot_icon(rgb: [u8; 3]) -> tauri::image::Image<'static> {
 }
 
 pub struct ActiveSession {
+    id: u64,
     stop_tx: Option<oneshot::Sender<()>>,
     capture: CaptureHandle,
 }
@@ -175,6 +186,10 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
 
     let mut capture = AudioCapture::start(cfg.chunk_ms, cfg.microphone.as_deref())
         .map_err(|e| format!("microphone unavailable: {e}"))?;
+    // Nothing below can fail, so a failed start never supersedes a session
+    // that is still waiting for its transcript. The caller holds the
+    // `DictationState` lock.
+    let id = LATEST_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
     let audio_rx = std::mem::replace(&mut capture.audio_rx, mpsc::channel(1).1);
     let level = capture.level_probe();
 
@@ -206,7 +221,7 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
             );
             // A connection/protocol failure otherwise leaves the capture
             // thread and session state alive until the user toggles again.
-            finish_session(&stream_app);
+            finish_session(&stream_app, id);
         }
     });
 
@@ -243,7 +258,7 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                             "duration_ms": duration_ms
                         }),
                     );
-                    finish_session(&event_app);
+                    finish_session(&event_app, id);
                     if !final_text.is_empty() {
                         match insert_text(&event_app, final_text.clone(), insert_method).await {
                             Ok(via) => emit(
@@ -260,15 +275,18 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                         // Leave the completed transcript visible long enough
                         // for the user to copy it from the HUD.
                         tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-                        hide_hud(&event_app);
+                        // A dictation started in the meantime owns the HUD.
+                        if is_latest_session(id) {
+                            hide_hud(&event_app);
+                        }
                     }
                 }
                 StreamEvent::Error(message) => {
                     emit(&event_app, json!({"kind": "error", "message": message}));
-                    finish_session(&event_app);
+                    finish_session(&event_app, id);
                 }
                 StreamEvent::Closed => {
-                    finish_session(&event_app);
+                    finish_session(&event_app, id);
                 }
             }
         }
@@ -283,7 +301,7 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
                 .state::<DictationState>()
                 .0
                 .lock()
-                .map(|g| g.is_some())
+                .map(|g| g.as_ref().is_some_and(|s| s.id == id))
                 .unwrap_or(false);
             if !active {
                 break;
@@ -293,15 +311,24 @@ fn start(app: &AppHandle) -> Result<ActiveSession, String> {
     });
 
     Ok(ActiveSession {
+        id,
         stop_tx: Some(stop_tx),
         capture,
     })
 }
 
-/// Drop any leftover session state (e.g. server ended the utterance).
-fn finish_session(app: &AppHandle) {
+/// Drop session `id`'s leftover state (e.g. server ended the utterance) and
+/// return the UI to idle. Does nothing once a newer session has started: that
+/// session's capture, tray status and recording flag are not ours to reset.
+fn finish_session(app: &AppHandle, id: u64) {
     let state = app.state::<DictationState>();
-    if let Ok(mut guard) = state.0.lock() {
+    {
+        let Ok(mut guard) = state.0.lock() else {
+            return;
+        };
+        if !is_latest_session(id) {
+            return;
+        }
         if let Some(mut session) = guard.take() {
             if let Some(tx) = session.stop_tx.take() {
                 let _ = tx.send(());
