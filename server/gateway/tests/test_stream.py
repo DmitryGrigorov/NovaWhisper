@@ -44,6 +44,48 @@ def test_stream_end_to_end(monkeypatch):
     assert final["duration_ms"] >= 0
 
 
+def _counting_session(monkeypatch) -> list[int]:
+    """Make the gateway use a mock session that counts finish() calls."""
+    from app import main
+    from app.providers.mock import MockSession
+
+    calls = [0]
+
+    class CountingSession(MockSession):
+        async def finish(self) -> str:
+            calls[0] += 1
+            return await super().finish()
+
+    monkeypatch.setattr(main, "create_session", lambda **_kwargs: CountingSession())
+    return calls
+
+
+def test_session_finished_once_on_normal_stop(monkeypatch):
+    # A second finish() repeats the provider's final decode (a full Whisper
+    # pass) and pushes a second end sentinel.
+    calls = _counting_session(monkeypatch)
+    client = TestClient(app)
+    with client.websocket_connect("/v1/stream") as ws:
+        ws.send_text(json.dumps(START))
+        assert ws.receive_json() == {"type": "ready"}
+        ws.send_bytes(b"\x00\x00" * 1600)
+        ws.send_text(json.dumps({"type": "stop"}))
+        while ws.receive_json()["type"] != "final":
+            pass
+    assert calls[0] == 1
+
+
+def test_session_finished_once_on_early_exit(monkeypatch):
+    calls = _counting_session(monkeypatch)
+    client = TestClient(app)
+    with client.websocket_connect("/v1/stream") as ws:
+        ws.send_text(json.dumps(START))
+        assert ws.receive_json() == {"type": "ready"}
+        ws.send_bytes(b"\x00")  # odd length -> rejected
+        assert ws.receive_json()["type"] == "error"
+    assert calls[0] == 1
+
+
 def test_rejects_bad_first_message(monkeypatch):
     monkeypatch.setenv("WHISPR_STT_PROVIDER", "mock")
     client = TestClient(app)
